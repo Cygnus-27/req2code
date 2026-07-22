@@ -1,0 +1,44 @@
+# Python 3.13. Fully pinned -- resolved and verified on 3.13.14 / Windows.
+#
+# Why 3.13 and not something older or newer:
+#   - 3.11/3.12 are security-only; 3.11 reaches EOL Oct 2027. No reason to start
+#     a new project on a runtime that old.
+#   - 3.14 has no prebuilt tree-sitter wheel (0.26.0 ships cp310-cp313 only), so
+#     it would mean compiling a C extension on Windows -- our biggest install risk.
+#   - 3.13 has wheels for everything and security support until Oct 2029.
+#
+# To change a pin: edit here, reinstall, re-run `pytest` and the spikes, and
+# commit the result. Do not let this file drift from the venv -- reproducibility
+# is a stated requirement of this project, and an unpinned run is an unciteable
+# number.
+
+# --- parsing -------------------------------------------------------------
+# Grammars ship as prebuilt wheels, so there is no C toolchain requirement.
+# This exact core/grammar pairing is VERIFIED: spikes/spike_treesitter.py parses
+# Java correctly at grammar ABI 14. Grammar wheels encode an ABI version and a
+# newer core can reject an older grammar, so if you bump either one, re-run that
+# spike before trusting anything downstream.
+tree-sitter==0.26.0
+tree-sitter-java==0.23.5
+# Fallback if tree-sitter ever breaks on another machine. Pure Python, Java only,
+# cannot fail to build. Not currently needed -- kept because swapping to it means
+# rewriting only src/parse/java_parser.py, which is cheap insurance.
+javalang==0.13.0
+
+# --- embeddings + search -------------------------------------------------
+# NOTE: on Windows the PyPI torch wheels are CPU-only, so this does not drag in
+# the ~2.5GB CUDA stack that Linux users get. Verified: no nvidia-* packages in
+# the resolved dependency set. CPU is ample -- the corpus is a few thousand nodes.
+torch==2.13.0
+sentence-transformers==5.6.0
+numpy==2.5.1
+# No FAISS, deliberately. A few thousand nodes means an exact numpy matmul is
+# instant, and this drops a real Windows install hazard.
+
+# --- baseline ------------------------------------------------------------
+scikit-learn==1.9.0
+
+# --- tooling -------------------------------------------------------------
+pytest==9.1.1
+ruff==0.15.22
+tqdm==4.69.0

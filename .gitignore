@@ -216,3 +216,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# req2code project-specific
+# ---------------------------------------------------------------------------
+
+# Corpus. Not committed: eTour data comes from the FTLR repo (GPL-3.0) and this
+# repo is Apache-2.0, so we keep their data out of our history entirely.
+# See README for how to re-fetch.
+data/
+
+# Downloaded sentence-transformer weights (~80MB). Cached locally so the demo
+# runs offline; re-downloadable, so not worth committing.
+models/
+
+# Generated evaluation output. Reproducible from a committed script + config,
+# which is the whole point -- committing it would invite editing it by hand.
+results/
+
+# Cached embedding matrices.
+*.npy
+
+# ---- Deliberately NOT ignored -------------------------------------------
+# src/justify/cache/  IS committed. The LLM justifications must ship with the
+# repo so the demo runs with the network off and so results are reproducible by
+# someone without an API key. It is an input, not an output.
