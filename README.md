@@ -82,6 +82,10 @@ exercise.
 
 ## Quickstart
 
+> **Operating this repo day to day:** see **[docs/OPERATING.md](docs/OPERATING.md)**
+> — setup, commands, what to tune for accuracy, how to verify a change did
+> anything, and why there is no training step.
+
 Requires **Python 3.13** and **git**.
 
 ```bash

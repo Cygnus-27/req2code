@@ -2,6 +2,10 @@
 
 Committed, human-facing material: frozen result snapshots and report notes.
 
+**New to this project? Start with [OPERATING.md](OPERATING.md)** — setup, the
+commands, what to change to improve accuracy, and how to tell whether a change
+did anything. It also explains why there is no training step.
+
 ## Why this exists alongside `results/`
 
 | | `results/` | `docs/results/` |
