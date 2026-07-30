@@ -13,15 +13,22 @@ Throwaway. Not imported by src/, not tested, not required to be clean.
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
-from src.index.node_doc import (
+# Running `python spikes/spike_split.py` puts spikes/ on sys.path, not the repo
+# root, so `import src...` would fail. Adding the repo root here means the spike
+# works however you launch it -- directly, via -m, or from an IDE play button.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.index.node_doc import (  # noqa: E402
     JAVA_STOPWORDS,
     MAX_BODY_WORDS,
     build_node_document,
     clean_doc_comment,
     split_identifier,
 )
-from src.parse.java_parser import enclosing_class_map, parse_repo
+from src.parse.java_parser import enclosing_class_map, parse_repo  # noqa: E402
 
 BAR = "=" * 78
 
