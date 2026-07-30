@@ -6,9 +6,9 @@ Recovering the lost mapping between what software was supposed to do and the
 code that actually does it — by matching meaning rather than keywords, and by
 tracing to individual methods rather than whole files.
 
-> **Status: early prototype.** The scaffolding and data contracts are in place;
-> the retrieval pipeline is being implemented. Numbers in this README are
-> placeholders until the ablation runs.
+> **Status: working prototype.** The full pipeline runs end to end on eTour —
+> parse → index → retrieve → evaluate → justify. `python -m scripts.run_demo`
+> completes in ~1.2 s, fully offline. Numbers below are real.
 
 ---
 
@@ -129,9 +129,16 @@ Java source tree, and the gold answer set.
 ### Running
 
 ```bash
-python -m scripts.run_demo        # the Review 1 demo — offline, <60s
+python -m scripts.run_demo        # the Review 1 demo — offline, ~1.2s
 python -m scripts.run_ablation    # full evaluation, writes results/
 pytest                            # tests
+```
+
+Optionally regenerate the LLM justifications (the only script that touches the
+network — needs `pip install anthropic` and an API key):
+
+```bash
+python -m scripts.generate_justifications --dry-run
 ```
 
 The first run downloads the sentence-transformer model (~80 MB) into `models/`.
@@ -139,23 +146,50 @@ Every subsequent run — including the demo — is fully offline.
 
 ## Results
 
-*Placeholder — to be filled from `results/ablation.md` once the pipeline runs.*
+Measured on eTour: 58 requirements, 1210 AST nodes across 116 files, 308 gold
+links. Regenerate with `python -m scripts.run_ablation` (writes
+`results/ablation.md` and `results/config.json`).
 
 Each row changes exactly one variable from the rows above it, so any gain can be
 attributed to a specific cause rather than to "the system".
 
-| Run | Representation | Granularity | Isolates | MAP | Recall@10 |
-|-----|----------------|-------------|----------|-----|-----------|
-| B0 | TF-IDF | file | classic baseline | — | — |
-| B1 | TF-IDF | AST node | does node granularity alone help? | — | — |
-| E0 | embeddings | file | does semantics alone help? | — | — |
-| E1 | embeddings | AST node | **our core method** | — | — |
-| E2 | E1 + query expansion | AST node | does requirement rewriting help? | — | — |
-| E3 | E2 + identifier overlap | AST node | does lexical signal add on top? | — | — |
+| Run | Representation | Granularity | Isolates | MAP | P@5 | R@10 |
+|-----|----------------|-------------|----------|-----|-----|------|
+| B0 | TF-IDF | file | classic baseline | 0.233 | 0.263 | 0.398 |
+| B1 | TF-IDF | AST node | does node granularity alone help? | 0.263 | 0.298 | 0.409 |
+| E0 | embeddings | file | does semantics alone help? | 0.366 | 0.393 | 0.516 |
+| E1 | embeddings | AST node | **our core method** | **0.409** | 0.407 | 0.556 |
+| E2 | E1 + query expansion | AST node | does requirement rewriting help? | 0.406 | 0.418 | **0.600** |
+| E3 | E2 + identifier overlap | AST node | does lexical signal add on top? | 0.405 | **0.432** | 0.598 |
 
-**B0 vs E1** is the headline comparison. **B1** and **E0** are what make it
-defensible: they separately rule out "the gain is just from smaller chunks" and
-"the gain is just from embeddings".
+**B0 → E1 is +0.176 MAP, a 76% relative improvement.** B1 and E0 are what make
+that defensible: they separately rule out "the gain is just from smaller chunks"
+and "the gain is just from embeddings".
+
+The decomposition is the interesting part:
+
+- node granularity alone (B0→B1): **+0.030**
+- semantics alone (B0→E0): **+0.133**
+- both together (B0→E1): **+0.176**
+
+0.030 + 0.133 = 0.163, but the combination gives 0.176 — the two effects are
+**more than additive**. Finer granularity gives the embedding model a cleaner
+unit to match against, so the techniques are complementary rather than redundant.
+
+**E2 and E3 are honest negatives on the headline metric.** Both lose ~0.004 MAP
+against E1 while improving other columns: E2 gives the best recall (R@10 0.600 vs
+0.556) and E3 the best precision (P@5 0.432 vs 0.407). Query expansion and lexical
+overlap help find and rank links, but neither improves the ranked-order quality
+MAP measures. Reported as measured, not filtered to the flattering subset.
+
+### Fair-comparison note
+
+Node-level runs retrieve a deep pool of nodes (20× the evaluated *k*), aggregate
+to file level, and are then truncated to exactly *k* files — the same number the
+file-level runs get. Without this, 10 retrieved nodes collapse into only ~5.8
+distinct files, and node-level runs would be silently penalised on recall for
+reasons unrelated to retrieval quality. See `NODE_FETCH_MULTIPLIER` in
+[ablation.py](src/eval/ablation.py).
 
 ## Limitations
 
@@ -179,13 +213,31 @@ one that names them.
   Large enough to compare configurations, too small for any claim about
   industrial-scale codebases.
 
-- **Orphan detection is threshold-dependent, and most orphans are boring.** In
-  any real codebase the majority of unclaimed nodes are getters, logging, and
-  framework glue that legitimately implement no requirement. The claim is that
-  this surfaces a small reviewable set, not that everything flagged is a defect.
+- **The orphan threshold is uncalibrated.** The 0.30 default flags 311 of 995
+  methods (31%) — far too many to review by hand. The 5th percentile of the
+  observed score distribution (0.17) flags 49 (5%), which is reviewable, but that
+  is an observation rather than a principled cutoff. The demo prints the full
+  distribution so the reader can pick their own. Calibrating this properly is
+  open work.
+
+- **Most orphans are boring.** In any real codebase the majority of unclaimed
+  nodes are getters, logging, and framework glue that legitimately implement no
+  requirement — the most-orphaned method in eTour is `getFont()`. The claim is
+  that this surfaces a small reviewable set, not that everything flagged is a
+  defect.
+
+- **One requirement has no gold links.** eTour ships 58 use cases but only 57
+  appear in the answer set — UC37 ("Logout") was never linked by the original
+  annotators. It is excluded from MAP rather than scored 0.0, which would drag
+  every configuration down by the same constant and break comparability with
+  published eTour results.
 
 - **Justifications are not yet evaluated.** They are generated and cached, but
-  scoring them against human rationale is future work.
+  scoring them against human rationale is future work. The committed cache was
+  authored by Claude in the session that built this pipeline rather than through
+  the API script; each entry records its own provenance in a `model` field, and
+  `python -m scripts.generate_justifications` regenerates them through the API
+  when credentials are available.
 
 - **Italian-language datasets excluded.** SMOS, eAnci, and Albergate were
   originally Italian; translation artifacts would confound the vocabulary-gap

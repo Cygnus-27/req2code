@@ -10,25 +10,36 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
+#: Directory names whose contents are skipped. eTour's code/ directory is flat,
+#: so this currently matches nothing -- it is here for iTrust, which is a real
+#: source tree with tests in it.
+SKIP_DIRS = frozenset({"test", "tests", "build", "target", ".git"})
+
 
 def walk_source_files(repo_root: str | Path, suffix: str = ".java") -> Iterator[Path]:
     """Yield every source file under `repo_root` with the given suffix.
 
     Args:
-        repo_root: Root of the code corpus, e.g. ``data/etour/source/``.
+        repo_root: Root of the code corpus, e.g. ``data/etour/code/``.
         suffix: File extension to match. Defaults to Java, the only language in
             eTour.
 
     Yields:
-        Paths, sorted, so that node ids and therefore results are stable across
-        runs and across machines.
+        Absolute paths, sorted, so node ids and results are stable across runs
+        and across machines.
 
-    Implementation notes:
-        - Skip anything under a directory named ``test``/``tests``. Test code
-          inflates the orphan count with nodes no requirement could ever claim,
-          which would make novelty claim #2 look noisier than it is. If you do
-          include tests, say so explicitly in the output.
-        - Yield absolute paths; the caller converts to repo-relative for
-          `CodeNode.file_path`.
+    Test code is skipped: it inflates the orphan count with nodes no requirement
+    could ever claim, which would make the orphan-detection claim look noisier
+    than it is.
     """
-    raise NotImplementedError
+    repo_root = Path(repo_root)
+    if not repo_root.is_dir():
+        raise FileNotFoundError(
+            f"Source directory not found: {repo_root}\n"
+            "Fetch the dataset first -- see the README quickstart."
+        )
+
+    for path in sorted(repo_root.rglob(f"*{suffix}")):
+        if any(part.lower() in SKIP_DIRS for part in path.parts):
+            continue
+        yield path.resolve()

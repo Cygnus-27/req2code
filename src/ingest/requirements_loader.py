@@ -1,8 +1,10 @@
 """Load eTour requirement documents off disk into `Requirement` objects.
 
 eTour ships one plain-text file per requirement (a use-case description). The
-filename stem is the requirement id used in the gold-link file, so it must be
-carried through verbatim -- see `Requirement.req_id`.
+filename INCLUDING the .txt extension is the requirement id used in the gold-link
+file -- gold lines look like ``UC1.txt: CulturalHeritage.java`` -- so the
+extension is carried through verbatim. Stripping it would make every gold lookup
+miss and silently score zero.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.contracts import Requirement
+from src.ingest.text_io import read_text
 
 
 def load_requirements(requirements_dir: str | Path) -> list[Requirement]:
@@ -17,19 +20,25 @@ def load_requirements(requirements_dir: str | Path) -> list[Requirement]:
 
     Args:
         requirements_dir: Directory of one-file-per-requirement text documents,
-            e.g. ``data/etour/requirements/``.
+            e.g. ``data/etour/req/``.
 
     Returns:
         Requirements sorted by `req_id`, so runs are reproducible regardless of
         filesystem iteration order.
-
-    Implementation notes for whoever fills this in:
-        - Use the filename stem as `req_id`. Do not lowercase or strip suffixes
-          until you have confirmed against the gold file what the ids look like.
-        - Read as UTF-8 with ``errors="replace"``. This corpus was translated
-          and has stray non-UTF8 bytes in places; a hard decode error here would
-          kill the whole run for one bad character.
-        - Keep the raw text. Cleaning/normalisation belongs in index/node_doc.py
-          so that the baseline and our method share identical input text.
     """
-    raise NotImplementedError
+    requirements_dir = Path(requirements_dir)
+    if not requirements_dir.is_dir():
+        raise FileNotFoundError(
+            f"Requirements directory not found: {requirements_dir}\n"
+            "Fetch the dataset first -- see the README quickstart."
+        )
+
+    reqs = [
+        Requirement(
+            req_id=path.name,  # keep the .txt -- gold links include it
+            text=read_text(path).strip(),
+            source_path=str(path),
+        )
+        for path in sorted(requirements_dir.glob("*.txt"))
+    ]
+    return sorted(reqs, key=lambda r: r.req_id)

@@ -38,6 +38,14 @@ numpy==2.5.1
 # --- baseline ------------------------------------------------------------
 scikit-learn==1.9.0
 
+# --- justification generation (OPTIONAL) ---------------------------------
+# Only needed to REGENERATE the LLM justifications via the Anthropic API.
+# Deliberately not pinned above: the demo reads the committed cache at
+# src/justify/cache/justifications.json and never imports this package, so the
+# offline guarantee does not depend on it being installed.
+#   pip install anthropic
+# anthropic>=0.116.0
+
 # --- tooling -------------------------------------------------------------
 pytest==9.1.1
 ruff==0.15.22
