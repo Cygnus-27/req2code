@@ -232,7 +232,12 @@ models/
 
 # Generated evaluation output. Reproducible from a committed script + config,
 # which is the whole point -- committing it would invite editing it by hand.
-results/
+#
+# LEADING SLASH IS LOAD-BEARING: a bare `results/` matches at ANY depth, which
+# would silently swallow docs/results/ -- the committed snapshots that give
+# reported figures their provenance. Anchored to the repo root, it matches only
+# the scratch directory. See docs/README.md.
+/results/
 
 # Cached embedding matrices.
 *.npy
