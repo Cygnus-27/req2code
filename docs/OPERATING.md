@@ -53,12 +53,22 @@ The accuracy work happens in **how we prepare the text**, not in the model.
 
 ## 3. Setup (once per machine)
 
+> **CRITICAL — use the full path to python.org 3.13, not bare `python`.** On
+> Windows, bare `python` often resolves to the Microsoft Store Python, whose
+> sandbox breaks `torch` with a cryptic `WinError 126` DLL error. Build the venv
+> from the python.org interpreter explicitly:
+
 ```bash
 cd C:\Users\athar\Desktop\req2codeProj\req2code
-python -m venv .venv
+"%LOCALAPPDATA%\Programs\Python\Python313\python.exe" -m venv .venv
 .venv\Scripts\activate
+python --version                        # MUST say 3.13.x -- stop if it doesn't
 python -m pip install -r requirements.txt
 ```
+
+If `python --version` reports 3.12 (the Store Python), the venv is wrong. Delete
+it (`rmdir /s /q .venv`, after closing any editor that has it open — see §11) and
+recreate with the full path above.
 
 Then fetch the dataset (not in the repo — see the README for why):
 
@@ -243,6 +253,9 @@ Then: `pytest -q ; ruff check .` and commit.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ModuleNotFoundError: torch` | venv not activated | `.venv\Scripts\activate` |
+| `torch ... WinError 126 ... DLL` | venv built on Store Python 3.12 | Rebuild venv with the full python.org 3.13 path — see §3 |
+| `python --version` says 3.12 in the venv | Same cause | Same fix — §3 |
+| `Access denied` deleting `.venv` | An editor (VS Code) or a running Python has it open | Fully close the editor, then `rmdir /s /q .venv` |
 | `FileNotFoundError: data/etour` | Dataset not fetched | See §3 |
 | `Parsed N gold links, expected 308` | Dataset incomplete or wrong file | Re-copy `data/etour` |
 | Demo very slow first run | Downloading the model | One-time; later runs are offline |
