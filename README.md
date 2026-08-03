@@ -7,68 +7,55 @@ code that actually does it — by matching meaning rather than keywords, and by
 tracing to individual methods rather than whole files.
 
 > **Status: working prototype.** The full pipeline runs end to end on eTour —
-> parse → index → retrieve → evaluate → justify. `python -m scripts.run_demo`
-> completes in ~1.2 s, fully offline. Numbers below are real.
+> parse → index → retrieve → evaluate → justify — offline, in ~1.2s. It also
+> runs live inside an editor via MCP, at 0.25ms per query. All numbers below are
+> measured, reproducible from committed scripts, and include the negative results.
 
 ---
 
 ## The problem
 
-Every non-trivial software project starts with requirements — a specification of
-what the system must do. Every project then spends years drifting away from
-them. The link between requirement #37 and the code satisfying it lives in
-someone's head, and then that person leaves.
+Every project starts with requirements and then spends years drifting from them.
+The link between requirement #37 and the code satisfying it lives in someone's
+head, and then that person leaves. That matters when you need to answer *"we're
+changing this requirement — what code breaks?"*, *"what is this method for?"*,
+or *"prove every safety requirement is implemented"* — an audit question with
+legal weight in regulated domains.
 
-This matters concretely when you need to answer:
-
-- *"We're changing this requirement — what code is affected?"*
-- *"What is this method for? Did anyone ask for it?"*
-- *"Can we prove every safety requirement is implemented?"* (in regulated
-  domains, an audit question with legal weight)
-
-Recovering those links automatically is a long-standing research problem. The
-classic approach — TF-IDF over requirement text vs. source text — has a known
-ceiling, because requirements and code describe the same behaviour in almost
-disjoint vocabulary. A requirement says *"the system shall notify the user"*;
-the code says `sendAlert()`. No keyword overlap, same idea.
+The classic approach — TF-IDF over requirement text vs. source text — has a hard
+ceiling, because the two describe the same behaviour in almost disjoint
+vocabulary. A requirement says *"the system shall notify the user"*; the code
+says `sendAlert()`. No keyword overlap, same idea. This is the **vocabulary
+gap**, and it is what the whole project is aimed at.
 
 ## What this does
 
-Three things that distinguish it from standard traceability tooling:
+**1. Traces to AST nodes, not files.** Existing tools point at
+`TourGuide.java`, a 600-line file. This points at
+`TourGuide.findNearbyAttractions()` at lines 142–171. Each method, constructor,
+and class is independently retrievable.
 
-**1. Traces to AST nodes, not files.**
-Existing tools tell you `TourGuide.java` is relevant — a 600-line file. This
-traces to `TourGuide.findNearbyAttractions()` at lines 142–171. Code is parsed
-into an AST and each method, constructor, and class becomes an independently
-retrievable unit, ranked by embedding similarity blended with structural signal.
+**2. Runs bidirectionally, and flags orphans.** As well as requirement → code, it
+runs code → requirement and flags nodes that *no* requirement appears to claim —
+dead code, undocumented features, or scope that crept in unrecorded. No standard
+traceability toolkit reports them.
 
-**2. Runs bidirectionally, and flags orphans.**
-As well as requirement → code, it runs code → requirement, then flags code nodes
-that *no* requirement appears to claim. Those orphans are dead code,
-undocumented features, or scope that crept in without ever being written down.
-No standard traceability toolkit reports them.
-
-**3. Explains its traces.**
-Each proposed link comes with a natural-language justification of *why* that
-method satisfies that requirement, grounded in specific identifiers in the code.
-A ranked list of scores is not reviewable by a human; an argument is.
+**3. Explains its traces.** Each link comes with a natural-language argument for
+why that method satisfies that requirement, grounded in specific identifiers. A
+ranked list of scores is not reviewable by a human; an argument is.
 
 ### How it works
 
-The central trick is in how code is represented. Raw source is a poor embedding
-input — mostly syntax, and written in a vocabulary no English sentence model
-understands. So instead of embedding source, we build a *pseudo-English document*
-for each AST node from:
-
-- the node name, split on camelCase/snake_case (`dispatchEvent` → "dispatch event")
-- the signature, including parameter names
-- attached comments and Javadoc
-- identifiers from the body, also split
-- the enclosing class name
+The central trick is how code is represented. Raw source is a poor embedding
+input — mostly syntax, in a vocabulary no English sentence model understands. So
+instead of embedding source, we synthesise a *pseudo-English document* per node
+from: the node name split on camelCase (`dispatchEvent` → "dispatch event"), the
+signature including parameter names, attached Javadoc, body identifiers (also
+split), and the enclosing class name.
 
 **Identifier splitting is the highest-impact step in the pipeline.** It is what
-bridges *"the system shall notify the user"* ↔ `sendAlert()`, and it is why a
-general-purpose sentence model works here without a code-specific one.
+bridges *"notify the user"* ↔ `sendAlert()`, and why a general-purpose sentence
+model works here without a code-specific one.
 
 Nodes are then scored against each requirement:
 
@@ -76,86 +63,54 @@ Nodes are then scored against each requirement:
 score = α · cosine(requirement, node_document) + β · jaccard(req_tokens, node_identifiers)
 ```
 
-α weights the semantic signal, β the lexical one. The baseline comparison starts
-at α=1, β=0 (pure semantics); adding β is a measured ablation, not a tuning
-exercise.
+α weights the semantic signal, β the lexical one. The baseline starts at α=1,
+β=0; adding β is a measured ablation, not a tuning exercise.
+
+**Nothing is trained.** The embedding model (`all-MiniLM-L6-v2`) is pre-trained
+and frozen — no training loop, no gradients, no GPU. With 58 requirements and
+308 links there is nowhere near enough data to fine-tune without overfitting. The
+accuracy work lives in text preparation, not in the model.
 
 ## Quickstart
 
-> **Operating this repo day to day:** see **[docs/OPERATING.md](docs/OPERATING.md)**
-> — setup, commands, what to tune for accuracy, how to verify a change did
-> anything, and why there is no training step.
+> Day-to-day operation, tuning, and troubleshooting: **[docs/OPERATING.md](docs/OPERATING.md)**.
 
-Requires **Python 3.13** and **git**.
+Requires **Python 3.13** and **git**. On Windows use the python.org interpreter
+explicitly — bare `python` often resolves to the Store build, whose sandbox
+breaks `torch` with a cryptic `WinError 126`.
 
 ```bash
-git clone https://github.com/<user>/req2code.git
-cd req2code
-
 python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS / Linux
-
+.venv\Scripts\activate          # Windows;  source .venv/bin/activate on Unix
 python -m pip install -r requirements.txt
-```
-
-Check `python --version` reports 3.13 before creating the venv. If you *just*
-installed Python, an already-open terminal will still have the old `PATH` — open
-a new one, or call the interpreter by full path:
-`%LOCALAPPDATA%\Programs\Python\Python313\python.exe -m venv .venv`.
-
-Verify the install with the parser spike, which is the dependency most likely to
-misbehave on a new machine:
-
-```bash
 python spikes/spike_treesitter.py    # expect: "OK - tree-sitter works, proceed"
 ```
 
-### Fetching the dataset
-
-`data/` is gitignored — the corpus is not redistributed with this repo (see
+`data/` is gitignored — the corpus is not redistributed here (see
 [Dataset & attribution](#dataset--attribution)). Fetch it once:
 
 ```bash
-# Clone OUTSIDE this repository
-cd ..
-git clone https://github.com/tobhey/finegrained-traceability.git
-
-# Copy only the eTour data back in
-cd req2code
-mkdir -p data
-cp -r ../finegrained-traceability/datasets/etour data/
+git clone https://github.com/tobhey/finegrained-traceability.git ../finegrained-traceability
+mkdir -p data && cp -r ../finegrained-traceability/datasets/etour data/
 ```
-
-You should end up with `data/etour/` containing the requirement documents, the
-Java source tree, and the gold answer set.
 
 ### Running
 
 ```bash
-python -m scripts.run_demo        # the Review 1 demo — offline, ~1.2s
+python -m scripts.run_demo        # the demo -- offline, ~1.2s
 python -m scripts.run_ablation    # full evaluation, writes results/
+python -m scripts.bench_latency   # interactive-latency benchmark
 pytest                            # tests
 ```
 
-Optionally regenerate the LLM justifications (the only script that touches the
-network — needs `pip install anthropic` and an API key):
-
-```bash
-python -m scripts.generate_justifications --dry-run
-```
-
-The first run downloads the sentence-transformer model (~80 MB) into `models/`.
-Every subsequent run — including the demo — is fully offline.
+The first run downloads the model (~80 MB) into `models/`. Everything after is
+fully offline.
 
 ## Results
 
 Measured on eTour: 58 requirements, 1210 AST nodes across 116 files, 308 gold
-links. Regenerate with `python -m scripts.run_ablation` (writes
-`results/ablation.md` and `results/config.json`).
-
-Each row changes exactly one variable from the rows above it, so any gain can be
-attributed to a specific cause rather than to "the system".
+links. Each row changes exactly one variable from the rows above it, so any gain
+is attributable to a specific cause rather than to "the system".
 
 | Run | Representation | Granularity | Isolates | MAP | P@5 | R@10 |
 |-----|----------------|-------------|----------|-----|-----|------|
@@ -167,103 +122,112 @@ attributed to a specific cause rather than to "the system".
 | E3 | E2 + identifier overlap | AST node | does lexical signal add on top? | 0.405 | **0.432** | 0.598 |
 
 **B0 → E1 is +0.176 MAP, a 76% relative improvement.** B1 and E0 are what make
-that defensible: they separately rule out "the gain is just from smaller chunks"
-and "the gain is just from embeddings".
+that defensible: they separately rule out "the gain is just smaller chunks" and
+"the gain is just embeddings".
 
-The decomposition is the interesting part:
-
-- node granularity alone (B0→B1): **+0.030**
-- semantics alone (B0→E0): **+0.133**
-- both together (B0→E1): **+0.176**
-
-0.030 + 0.133 = 0.163, but the combination gives 0.176 — the two effects are
-**more than additive**. Finer granularity gives the embedding model a cleaner
-unit to match against, so the techniques are complementary rather than redundant.
+The decomposition is the interesting part — granularity alone (B0→B1) is
+**+0.030**, semantics alone (B0→E0) is **+0.133**, both together (B0→E1) is
+**+0.176**. But 0.030 + 0.133 = 0.163, so the two effects are **more than
+additive**: finer granularity gives the embedding model a cleaner unit to match
+against, making the techniques complementary rather than redundant.
 
 **E2 and E3 are honest negatives on the headline metric.** Both lose ~0.004 MAP
-against E1 while improving other columns: E2 gives the best recall (R@10 0.600 vs
-0.556) and E3 the best precision (P@5 0.432 vs 0.407). Query expansion and lexical
-overlap help find and rank links, but neither improves the ranked-order quality
-MAP measures. Reported as measured, not filtered to the flattering subset.
+against E1 while winning elsewhere — E2 the best recall (R@10 0.600), E3 the best
+precision (P@5 0.432). Query expansion and lexical overlap help find and rank
+links, but neither improves the ranked-order quality MAP measures. Reported as
+measured, not filtered to the flattering subset. (Note E2's "query expansion" is
+a mechanical stripper for use-case boilerplate identical across all 58
+requirements, not LLM rewriting — see `retrieve/query_expansion.py`.)
 
 ### Fair-comparison note
 
-Node-level runs retrieve a deep pool of nodes (20× the evaluated *k*), aggregate
-to file level, and are then truncated to exactly *k* files — the same number the
-file-level runs get. Without this, 10 retrieved nodes collapse into only ~5.8
-distinct files, and node-level runs would be silently penalised on recall for
-reasons unrelated to retrieval quality. See `NODE_FETCH_MULTIPLIER` in
-[ablation.py](src/eval/ablation.py).
+Node-level runs retrieve a deep pool (20× the evaluated *k*), aggregate to file
+level, then truncate to exactly *k* files — the same number file-level runs get.
+Without this, 10 retrieved nodes collapse into only ~5.8 distinct files and
+node-level runs are silently penalised on recall for reasons unrelated to
+retrieval quality. See `NODE_FETCH_MULTIPLIER` in [ablation.py](src/eval/ablation.py).
+
+## Editor integration
+
+The ablation answers *"is it accurate?"*. `python -m scripts.bench_latency`
+answers *"is it deployable?"* — measured on eTour:
+
+| | Cost | Budget |
+|---|---|---|
+| Cold start (once, at server boot) | ~3.5 s (92% model loading) | — |
+| Requirement → ranked methods | **0.25 ms** | 100 ms |
+| Method → ranked requirements | **0.02 ms** | 100 ms |
+| Orphan scan, whole corpus | **0.34 ms** | 100 ms |
+| New free-text query (embed + search) | **6.2 ms** | 100 ms |
+| Re-index one edited file | **46 ms** | 100 ms |
+
+100 ms is the threshold below which a response is perceived as instantaneous.
+Every interactive path is inside it; boot is not and needn't be, since it is paid
+once behind the editor's own startup. A full corpus rebuild is 2.6 s, so
+per-file incremental re-indexing is ~57× cheaper — that is what makes live
+re-indexing viable, and why the embedding cache is keyed **per node** rather than
+per corpus.
+
+`python -m scripts.mcp_server` exposes retrieval over the **Model Context
+Protocol**, so one server reaches every MCP-speaking editor — Claude Code,
+Cursor, Zed, Windsurf, Claude Desktop — rather than needing a VSCode extension
+(which would miss Zed) plus a native Zed extension in Rust. Requires
+`pip install mcp`; nothing else in the project imports it. Tools exposed:
+`trace_requirement`, `search_code`, `whose_requirement`, `find_orphans`,
+`justify_link`. Every call first re-indexes any file whose mtime moved (~9 ms to
+check), so results never go stale — polling on the read path rather than a
+filesystem watcher, which cannot miss an event.
 
 ## Limitations
 
 Stated up front, because a prototype that hides its caveats is worth less than
 one that names them.
 
-- **Evaluation granularity does not match retrieval granularity.** The eTour
-  gold links map requirements to *files*, but we retrieve *methods*. We
-  therefore aggregate node scores up to file level (a file scores as well as its
-  best-matching node) and evaluate there, so the numbers stay comparable with
-  the baseline and with published results. Node-level output is reported
-  qualitatively, in the demo. This is a real limitation of the evaluation, not
-  of the method — and the absence of node-level gold data is precisely why
-  finer-grained traceability is under-studied.
-
-- **One dataset, one language.** eTour only: English requirements, Java code.
-  iTrust is planned as a second dataset to support any generalisation claim.
-  Nothing here has been shown to transfer to another language.
-
-- **Small corpus.** ~58 requirements, ~116 code artifacts, ~308 gold links.
-  Large enough to compare configurations, too small for any claim about
-  industrial-scale codebases.
-
+- **Evaluation granularity ≠ retrieval granularity.** eTour gold links map
+  requirements to *files*; we retrieve *methods*. Node scores are therefore
+  max-aggregated to file level for scoring (a file scores as well as its best
+  node), keeping numbers comparable with the baseline and published results.
+  Node-level output is reported qualitatively, in the demo. This is a limitation
+  of the evaluation, not the method — and the absence of node-level gold data is
+  precisely why finer-grained traceability is under-studied.
+- **One dataset, one language.** English requirements, Java code. iTrust is
+  planned as a second dataset; nothing here is yet shown to generalise.
+- **Small corpus.** ~58 requirements, ~116 artifacts, ~308 links. Enough to
+  compare configurations, too small for claims about industrial codebases.
 - **The orphan threshold is uncalibrated.** The 0.30 default flags 311 of 995
-  methods (31%) — far too many to review by hand. The 5th percentile of the
-  observed score distribution (0.17) flags 49 (5%), which is reviewable, but that
-  is an observation rather than a principled cutoff. The demo prints the full
-  distribution so the reader can pick their own. Calibrating this properly is
-  open work.
-
-- **Most orphans are boring.** In any real codebase the majority of unclaimed
-  nodes are getters, logging, and framework glue that legitimately implement no
-  requirement — the most-orphaned method in eTour is `getFont()`. The claim is
-  that this surfaces a small reviewable set, not that everything flagged is a
-  defect.
-
+  methods (31%) — far too many to review. The 5th percentile of the observed
+  distribution (0.17) flags 49 (5%), which is reviewable, but that is an
+  observation rather than a principled cutoff. The demo prints the full
+  distribution so a reader can pick their own. Calibrating it is open work.
+- **Most orphans are boring.** In any real codebase most unclaimed nodes are
+  getters, logging, and framework glue that legitimately implement no
+  requirement — eTour's most-orphaned method is `getFont()`. The claim is that
+  this surfaces a small reviewable set, not that everything flagged is a defect.
 - **One requirement has no gold links.** eTour ships 58 use cases but only 57
   appear in the answer set — UC37 ("Logout") was never linked by the original
   annotators. It is excluded from MAP rather than scored 0.0, which would drag
-  every configuration down by the same constant and break comparability with
-  published eTour results.
-
+  every configuration down by the same constant and break comparability.
 - **Justifications are not yet evaluated.** They are generated and cached, but
   scoring them against human rationale is future work. The committed cache was
-  authored by Claude in the session that built this pipeline rather than through
-  the API script; each entry records its own provenance in a `model` field, and
-  `python -m scripts.generate_justifications` regenerates them through the API
-  when credentials are available.
-
+  authored by Claude in the session that built the pipeline rather than through
+  the API script; each entry records its own provenance in a `model` field.
 - **Italian-language datasets excluded.** SMOS, eAnci, and Albergate were
   originally Italian; translation artifacts would confound the vocabulary-gap
-  analysis that the whole method rests on.
+  analysis the method rests on.
 
 ## Dataset & attribution
 
-This project uses the **eTour** dataset, obtained via the
+Uses the **eTour** dataset, obtained via the
 [finegrained-traceability](https://github.com/tobhey/finegrained-traceability)
-(FTLR) repository by Tobias Hey et al.
+(FTLR) repository by Tobias Hey et al. eTour originates with the **Center of
+Excellence for Software & Systems Traceability (CoEST)**. Full credit for the
+corpus belongs to its original authors and to the FTLR authors for the cleaned,
+packaged form.
 
-eTour originates with the **Center of Excellence for Software & Systems
-Traceability (CoEST)** and has been widely used in traceability research. Full
-credit for the corpus belongs to its original authors and to the FTLR authors
-for the cleaned, packaged form.
-
-> **We use their data only — never their code.**
-> The FTLR repository is licensed **GPL-3.0**; this project is **Apache-2.0**.
-> Copying FTLR source into this repository would create a license conflict, so
-> we do not do it. Reading their work for ideas is fine and normal; copying
-> implementation is not. `data/` is gitignored so no part of their corpus enters
-> this repository's history.
+> **We use their data only — never their code.** FTLR is **GPL-3.0**; this
+> project is **Apache-2.0**. Copying their source here would create a license
+> conflict, so we do not. `data/` is gitignored, so no part of their corpus
+> enters this repository's history.
 
 See [NOTICE](NOTICE) for the full attribution statement.
 
@@ -274,28 +238,30 @@ src/
   contracts.py   ← frozen data contracts; everything depends on these
   ingest/        requirements loader, repo walker
   parse/         tree-sitter → CodeNode
-  index/         node-document builder, embedder, vector store
+  index/         node-document builder, per-node embedding cache, vector store
   retrieve/      req→code, code→req, orphans, hybrid scorer, query expansion
   justify/       LLM prompt + committed cache/
   eval/          gold loader, metrics, TF-IDF baseline, ablation runner
-scripts/         run_demo.py, run_ablation.py
+  pipeline.py    corpus loading + incremental re-index
+scripts/         run_demo, run_ablation, bench_latency, mcp_server, snapshot_results
 spikes/          throwaway learning scripts (not imported by src/)
 tests/
 ```
 
-`src/contracts.py` defines `Requirement`, `CodeNode`, and the results CSV
-schema. These are frozen by agreement between both authors: freezing the
-interface is what lets the two halves of the project be built in parallel
-without blocking on each other.
+`src/contracts.py` defines `Requirement`, `CodeNode`, and the results CSV schema.
+These are frozen by agreement between both authors: freezing the interface is
+what lets the two halves of the project be built in parallel without blocking on
+each other. It is also why the retrieval engine and the presentation layer were
+never coupled — the MCP server is a client of that contract, not of internals.
 
 ## Non-functional requirements
 
-- **Offline** — models and LLM outputs cached locally; the demo makes no network
-  calls
-- **Reproducible** — pinned dependencies, fixed seeds, single entry-point script
-- **Fast** — prototype demo runs in under 60 seconds
-- **Traceable** — every number in the report maps to a committed script and a
-  logged config
+- **Offline** — models and LLM outputs cached locally; no network calls at demo
+  or serve time (the MCP server pins `HF_HUB_OFFLINE`, which also cuts boot from
+  15 s to 3.5 s)
+- **Reproducible** — pinned dependencies, fixed seeds, single entry-point scripts
+- **Fast** — demo under 60s; every interactive query under 100ms
+- **Traceable** — every number maps to a committed script and a logged config
 
 ## License
 

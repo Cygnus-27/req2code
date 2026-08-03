@@ -38,6 +38,14 @@ numpy==2.5.1
 # --- baseline ------------------------------------------------------------
 scikit-learn==1.9.0
 
+# --- editor integration (OPTIONAL) ---------------------------------------
+# Only needed to run `python -m scripts.mcp_server`, which exposes retrieval to
+# MCP-speaking editors (Claude Code, Cursor, Zed, Windsurf). Deliberately not
+# pinned above: the demo, ablation, and benchmark never import it, so the core
+# install stays free of a server stack (starlette, uvicorn, pydantic).
+#   pip install mcp
+# mcp>=2.0.0
+
 # --- justification generation (OPTIONAL) ---------------------------------
 # Only needed to REGENERATE the LLM justifications via the Anthropic API.
 # Deliberately not pinned above: the demo reads the committed cache at

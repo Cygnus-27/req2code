@@ -16,14 +16,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.retrieve.scorer import hybrid_score, jaccard, jaccard_matrix
-from src.retrieve.orphans import find_orphans, score_distribution
 from src.contracts import CodeNode
-
+from src.retrieve.orphans import find_orphans, score_distribution
+from src.retrieve.scorer import hybrid_score, jaccard, jaccard_matrix
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_node(name: str, kind: str = "method", start_line: int = 1) -> CodeNode:
     return CodeNode(
@@ -41,6 +41,7 @@ def _make_node(name: str, kind: str = "method", start_line: int = 1) -> CodeNode
 # ---------------------------------------------------------------------------
 # scorer.jaccard
 # ---------------------------------------------------------------------------
+
 
 class TestJaccard:
     def test_identical_sets(self):
@@ -71,6 +72,7 @@ class TestJaccard:
 # scorer.hybrid_score
 # ---------------------------------------------------------------------------
 
+
 class TestHybridScore:
     def test_pure_semantic_default(self):
         # beta defaults to 0 -> result is just alpha * cosine
@@ -78,7 +80,9 @@ class TestHybridScore:
         assert score == pytest.approx(0.8)
 
     def test_alpha_scaling(self):
-        score = hybrid_score(cosine_sim=0.5, req_tokens=set(), node_identifiers=set(), alpha=2.0)
+        score = hybrid_score(
+            cosine_sim=0.5, req_tokens=set(), node_identifiers=set(), alpha=2.0
+        )
         assert score == pytest.approx(1.0)
 
     def test_lexical_signal_added(self):
@@ -120,6 +124,7 @@ class TestHybridScore:
 # scorer.jaccard_matrix
 # ---------------------------------------------------------------------------
 
+
 class TestJaccardMatrix:
     def test_shape(self):
         req_sets = [{"a", "b"}, {"c"}]
@@ -151,6 +156,7 @@ class TestJaccardMatrix:
 # orphans.score_distribution
 # ---------------------------------------------------------------------------
 
+
 class TestScoreDistribution:
     def test_empty_array_returns_empty_dict(self):
         assert score_distribution(np.array([], dtype=np.float32)) == {}
@@ -175,6 +181,7 @@ class TestScoreDistribution:
 # ---------------------------------------------------------------------------
 # orphans.find_orphans
 # ---------------------------------------------------------------------------
+
 
 class TestFindOrphans:
     """find_orphans depends on similarity_matrix from vector_store.
@@ -234,8 +241,12 @@ class TestFindOrphans:
         req_vecs = np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32)
         nodes = [_make_node("MyConstructor", kind="constructor")]
         # Exclude constructors
-        result = find_orphans(nodes, node_vecs, req_vecs, threshold=1.0, kinds=("method",))
+        result = find_orphans(
+            nodes, node_vecs, req_vecs, threshold=1.0, kinds=("method",)
+        )
         assert result == []
         # Include constructors
-        result = find_orphans(nodes, node_vecs, req_vecs, threshold=1.0, kinds=("constructor",))
+        result = find_orphans(
+            nodes, node_vecs, req_vecs, threshold=1.0, kinds=("constructor",)
+        )
         assert len(result) == 1
