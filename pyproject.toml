@@ -4,6 +4,13 @@
 # do not otherwise need.
 pythonpath = ["."]
 testpaths = ["tests"]
+# The suite is offline and instant by design -- no model download, no corpus.
+# Tests that need the real sentence-transformer are marked `slow` and excluded
+# by default; run them with `pytest -m slow` (or `pytest -m ""` for everything).
+addopts = "-m 'not slow'"
+markers = [
+    "slow: needs the real embedding model (~3.5s load, warm models/ required)",
+]
 
 [tool.ruff]
 line-length = 88

@@ -100,7 +100,8 @@ mkdir -p data && cp -r ../finegrained-traceability/datasets/etour data/
 python -m scripts.run_demo        # the demo -- offline, ~1.2s
 python -m scripts.run_ablation    # full evaluation, writes results/
 python -m scripts.bench_latency   # interactive-latency benchmark
-pytest                            # tests
+pytest                            # tests -- offline, no model, ~1.3s
+pytest -m slow                    # + real-model integration tests
 ```
 
 The first run downloads the model (~80 MB) into `models/`. Everything after is
@@ -177,6 +178,21 @@ Cursor, Zed, Windsurf, Claude Desktop — rather than needing a VSCode extension
 `justify_link`. Every call first re-indexes any file whose mtime moved (~9 ms to
 check), so results never go stale — polling on the read path rather than a
 filesystem watcher, which cannot miss an event.
+
+### Running on your own repository
+
+Gold links are an **evaluation** input, not a retrieval one — nothing in
+`parse/`, `index/`, `retrieve/` or `justify/` reads them. Any directory with
+`req/*.txt` and `code/**.java` therefore works, with or without an answer key:
+
+```bash
+REQ2CODE_DATA_DIR=/path/to/your/project python -m scripts.mcp_server
+```
+
+Without gold, tracing, orphan detection, and justification behave identically;
+you simply get no accuracy numbers, because there is nothing to score against.
+Strict validation of the documented eTour answer-key shape stays on for the
+bundled corpus, so the published figures keep their guard rails.
 
 ## Limitations
 

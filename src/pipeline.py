@@ -140,13 +140,27 @@ class Corpus:
 
 def load_corpus(
     data_dir: str | Path = DEFAULT_DATA_DIR,
-    strict_gold: bool = True,
+    strict_gold: bool | None = None,
     verbose: bool = False,
 ) -> Corpus:
-    """Parse, document-build, and embed the whole corpus.
+    """Parse, document-build, and embed a corpus at ``data_dir``.
 
-    Embeddings are content-hash cached to ``models/.embcache``, so the first run
-    pays the model cost (~10s) and every later run is near-instant.
+    Expects ``<data_dir>/req/*.txt`` and ``<data_dir>/code/**.java``. An answer
+    key at `GOLD_FILENAME` is optional: present, it enables scoring; absent,
+    `Corpus.gold` is empty and retrieval, orphans, and justification all work
+    unchanged. Nothing outside eval/ reads gold.
+
+    Args:
+        data_dir: Corpus root.
+        strict_gold: Enforce the documented eTour answer-key shape. Defaults to
+            ``True`` for the bundled eTour path and ``False`` for anything else,
+            so the published numbers stay guarded by the count assertions while
+            an arbitrary repository just works. Pass explicitly to override.
+        verbose: Print per-step timings.
+
+    Embeddings are content-hash cached per node to ``models/.embcache``, so the
+    first run pays the model cost and later runs -- and single-file edits -- are
+    near-instant. See `Corpus.reindex_file`.
     """
     from src.eval.gold_loader import load_gold_links
     from src.index.embedder import embed_texts
@@ -155,6 +169,8 @@ def load_corpus(
     from src.parse.java_parser import enclosing_class_map, parse_repo
 
     data_dir = Path(data_dir)
+    if strict_gold is None:
+        strict_gold = data_dir.resolve() == Path(DEFAULT_DATA_DIR).resolve()
     timings: dict[str, float] = {}
 
     def step(label: str):

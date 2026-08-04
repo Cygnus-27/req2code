@@ -102,7 +102,10 @@ python -c "import torch, tree_sitter; print('venv OK')"
 | `python -m scripts.run_demo` | The showcase. One requirement, all three claims. | ~1 s |
 | `python -m scripts.run_ablation` | All six configurations, real numbers. | ~5 s |
 | `python spikes/spike_split.py` | Inspect how one method becomes searchable text. | ~1 s |
-| `pytest -q` | Contract tests. | <1 s |
+| `python -m scripts.bench_latency` | Interactive-latency numbers (query, re-index). | ~5 s |
+| `python -m scripts.mcp_server` | Serve retrieval to an MCP editor. Needs `pip install mcp`. Set `REQ2CODE_DATA_DIR` to point at another repo. | — |
+| `pytest -q` | Contract + synthetic-repo tests. Offline, no model. | ~1 s |
+| `pytest -m slow` | Real-model integration tests (excluded by default). | ~20 s |
 | `ruff check . ; ruff format .` | Lint and auto-format. | <1 s |
 
 First run downloads the model (~80 MB, one time). Everything after that is fully

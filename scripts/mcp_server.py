@@ -69,6 +69,13 @@ server = MCPServer(
     ),
 )
 
+#: Corpus to serve. Any directory with `req/*.txt` and `code/**.java` works; an
+#: answer key is optional, and without one every tool behaves identically except
+#: that `trace_requirement` stops annotating hits as gold. Set via the `env`
+#: block every editor's MCP config already supports, so pointing the server at
+#: your own project needs no code change and no CLI parsing.
+DATA_DIR = Path(os.environ.get("REQ2CODE_DATA_DIR", DEFAULT_DATA_DIR))
+
 _corpus = None
 
 
@@ -76,7 +83,7 @@ def corpus():
     """The loaded corpus, refreshed against on-disk changes."""
     global _corpus
     if _corpus is None:
-        _corpus = load_corpus(DEFAULT_DATA_DIR)
+        _corpus = load_corpus(DATA_DIR)
     _corpus.refresh()
     return _corpus
 
@@ -245,9 +252,11 @@ def justify_link(req_id: str, node_id: str) -> str:
 
 
 def main() -> int:
-    if not Path(DEFAULT_DATA_DIR).is_dir():
+    if not DATA_DIR.is_dir():
         sys.exit(
-            f"Corpus not found at {DEFAULT_DATA_DIR} -- see the README quickstart."
+            f"Corpus not found at {DATA_DIR} -- expected `req/` and `code/` inside "
+            "it. Set REQ2CODE_DATA_DIR to point elsewhere, or see the README "
+            "quickstart to fetch eTour."
         )
 
     # Load eagerly, before serving. The alternative -- lazy on first call -- just

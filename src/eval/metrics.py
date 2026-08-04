@@ -164,12 +164,22 @@ def mean_average_precision(
 def evaluate(
     rows: Sequence[ResultRow], gold: dict[str, set[str]], ks: Sequence[int] = (5, 10)
 ) -> dict[str, float]:
-    """Compute the full metric set for one run's file-level rows."""
+    """Compute the full metric set for one run's file-level rows.
+
+    With no gold links -- an unlabelled repository -- every metric is 0.0 rather
+    than an error. Retrieval still works there (see eval/gold_loader.py); it just
+    cannot be scored, and returning zeros keeps that an honest "unmeasured"
+    rather than a crash in a caller that only wanted the rankings.
+    """
     ranked = rows_to_ranked_lists(rows)
     graded = {r: g for r, g in gold.items() if g}
 
     metrics: dict[str, float] = {"MAP": mean_average_precision(ranked, gold)}
     for k in ks:
+        if not graded:
+            metrics[f"P@{k}"] = 0.0
+            metrics[f"R@{k}"] = 0.0
+            continue
         metrics[f"P@{k}"] = sum(
             precision_at_k(ranked.get(r, []), g, k) for r, g in graded.items()
         ) / len(graded)

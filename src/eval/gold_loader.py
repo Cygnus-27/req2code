@@ -39,24 +39,39 @@ EXPECTED_REQUIREMENTS = 57
 
 
 def load_gold_links(gold_path: str | Path, strict: bool = True) -> dict[str, set[str]]:
-    """Read the gold trace matrix.
+    """Read the gold trace matrix. Returns ``{}`` when there is no answer key.
 
     Args:
-        gold_path: Path to eTour's answer-set file
-            (``data/etour/etour_solution_links_english.txt``).
-        strict: Raise if the parsed totals do not match the documented corpus.
+        gold_path: Path to an answer-set file, e.g.
+            ``data/etour/etour_solution_links_english.txt``.
+        strict: Enforce the documented eTour shape -- the file must exist and
+            must parse to exactly `EXPECTED_LINKS` links over
+            `EXPECTED_REQUIREMENTS` requirements. Pass ``False`` for any other
+            corpus, where those counts are meaningless.
 
     Returns:
         Mapping of ``req_id -> set of code file names`` that genuinely implement
         it. A set because membership testing is the only operation metrics.py
         needs, and duplicates in the source file should collapse.
+
+    Gold links are an *evaluation* input, not a retrieval input: nothing in
+    parse/, index/, retrieve/ or justify/ reads them. An unlabelled repository
+    therefore traces, ranks, and reports orphans exactly as eTour does -- it
+    simply cannot be scored, because there is nothing to score against. That is
+    why a missing file is a valid state under ``strict=False`` rather than an
+    error, and why the strict eTour contract is still enforced by default: a
+    silent parse failure on the dataset we *do* publish numbers for would
+    produce excellent-looking recall against a fraction of the answer key.
     """
     gold_path = Path(gold_path)
     if not gold_path.exists():
-        raise FileNotFoundError(
-            f"Gold link file not found: {gold_path}\n"
-            "Fetch the dataset first -- see the README quickstart."
-        )
+        if strict:
+            raise FileNotFoundError(
+                f"Gold link file not found: {gold_path}\n"
+                "Fetch the dataset first -- see the README quickstart, or pass "
+                "strict=False to run unscored on a corpus with no answer key."
+            )
+        return {}
 
     gold: dict[str, set[str]] = defaultdict(set)
     total = 0
