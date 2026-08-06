@@ -23,12 +23,16 @@ from __future__ import annotations
 
 import time
 
-from src.index.embedder import _load_model, embed_texts
+from src.index.embedder import _load_model, embed_texts, pin_offline_if_cached
 from src.index.node_doc import build_all_documents
 from src.index.vector_store import search, similarity_matrix
 from src.ingest.requirements_loader import load_requirements
 from src.parse.java_parser import enclosing_class_map, parse_file, parse_repo
 from src.pipeline import DEFAULT_DATA_DIR
+
+# Otherwise the "cold start" figure would be measuring huggingface.co round-trips
+# rather than model loading -- see embedder.pin_offline_if_cached.
+pin_offline_if_cached()
 
 BUDGET_MS = 100.0
 WIDTH = 74

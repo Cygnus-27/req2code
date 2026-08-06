@@ -188,3 +188,32 @@ def _encode(texts: list[str], model_name: str, show_progress: bool) -> np.ndarra
 def is_offline() -> bool:
     """Whether HF is pinned offline. The demo asserts this indirectly by working."""
     return os.environ.get("HF_HUB_OFFLINE") == "1"
+
+
+def model_is_cached(model_dir: Path = MODEL_DIR) -> bool:
+    """Whether a downloaded model is already present in `model_dir`."""
+    return any(model_dir.glob("models--*/snapshots/*"))
+
+
+def pin_offline_if_cached(model_dir: Path = MODEL_DIR) -> bool:
+    """Pin HuggingFace offline when the model is already on disk. Returns the state.
+
+    Call this from an entry point BEFORE sentence-transformers is imported.
+
+    Without it, the loader revalidates a model it already has by making ~20 HEAD
+    requests to huggingface.co -- measured at 15.2s of a 15.5s startup, versus
+    3.4s offline. That is slow, it makes a flaky network or an HF outage able to
+    stall a run, and it quietly contradicts this project's stated offline
+    guarantee: the demo is supposed to make no network calls, and it was making
+    twenty.
+
+    Guarded on the model being present so the documented first-run download
+    still works. An explicit HF_HUB_OFFLINE in the environment always wins, so a
+    caller can still force either behaviour.
+    """
+    if "HF_HUB_OFFLINE" in os.environ:
+        return is_offline()
+    if model_is_cached(model_dir):
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        return True
+    return False

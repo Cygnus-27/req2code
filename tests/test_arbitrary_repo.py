@@ -27,6 +27,7 @@ default (`pytest -m slow` to run it).
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 
 import numpy as np
@@ -640,6 +641,66 @@ class TestRefresh:
         assert corpus.refresh() == []
         with pytest.raises(RuntimeError, match="code root"):
             corpus.reindex_file(repo / "code" / "AdvertBoard.java")
+
+
+# ---------------------------------------------------------------------------
+# The offline guarantee
+# ---------------------------------------------------------------------------
+
+
+class TestOfflinePin:
+    """`pin_offline_if_cached` makes "no network calls" unconditional.
+
+    The guard matters in both directions: it has to pin offline once the model
+    is on disk, and it must NOT pin before the documented first-run download,
+    which would leave a fresh clone unable to fetch the model at all.
+    """
+
+    def _clean_env(self, monkeypatch):
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+
+    def test_pins_when_model_present(self, tmp_path, monkeypatch):
+        from src.index.embedder import pin_offline_if_cached
+
+        self._clean_env(monkeypatch)
+        (tmp_path / "models--x--y" / "snapshots" / "abc").mkdir(parents=True)
+        assert pin_offline_if_cached(tmp_path) is True
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+
+    def test_does_not_pin_before_first_download(self, tmp_path, monkeypatch):
+        from src.index.embedder import pin_offline_if_cached
+
+        self._clean_env(monkeypatch)
+        assert pin_offline_if_cached(tmp_path) is False
+        assert "HF_HUB_OFFLINE" not in os.environ
+
+    def test_explicit_env_always_wins(self, tmp_path, monkeypatch):
+        from src.index.embedder import pin_offline_if_cached
+
+        (tmp_path / "models--x--y" / "snapshots" / "abc").mkdir(parents=True)
+        monkeypatch.setenv("HF_HUB_OFFLINE", "0")
+        assert pin_offline_if_cached(tmp_path) is False
+        assert os.environ["HF_HUB_OFFLINE"] == "0", "caller override must survive"
+
+    def test_model_is_cached_detects_layout(self, tmp_path):
+        from src.index.embedder import model_is_cached
+
+        assert model_is_cached(tmp_path) is False
+        (
+            tmp_path
+            / "models--sentence-transformers--all-MiniLM-L6-v2"
+            / "snapshots"
+            / "s1"
+        ).mkdir(parents=True)
+        assert model_is_cached(tmp_path) is True
+
+    def test_entry_points_pin_at_import(self, monkeypatch):
+        """The scripts must pin at import time, before torch is loaded."""
+        import importlib
+
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        importlib.reload(importlib.import_module("scripts.run_demo"))
+        assert os.environ.get("HF_HUB_OFFLINE") == "1"
 
 
 # ---------------------------------------------------------------------------

@@ -34,18 +34,13 @@ import os
 import sys
 from pathlib import Path
 
-# Pin HuggingFace offline BEFORE sentence-transformers is imported. Without it
-# the loader makes ~20 HEAD requests to huggingface.co to revalidate a model it
-# already has on disk -- measured at 15.2s of boot, versus 3.4s offline. It also
-# means a flaky network or an HF outage can hang an editor's startup, which is
-# not an acceptable failure mode for a server the editor depends on.
-#
-# Set here rather than in index/embedder.py because the very first run of the
-# project still has to download the model; only this long-lived server can
-# assume a warm cache.
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-
+# Pin HuggingFace offline before sentence-transformers is imported: a flaky
+# network or an HF outage must not be able to stall an editor's startup. Guarded
+# on the model already being downloaded, so a first run still works.
+from src.index.embedder import pin_offline_if_cached  # noqa: E402
 from src.pipeline import DEFAULT_DATA_DIR, load_corpus  # noqa: E402
+
+pin_offline_if_cached()
 
 try:
     from mcp.server import MCPServer  # noqa: E402

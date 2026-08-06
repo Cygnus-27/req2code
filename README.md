@@ -7,7 +7,7 @@ code that actually does it — by matching meaning rather than keywords, and by
 tracing to individual methods rather than whole files.
 
 > **Status: working prototype.** The full pipeline runs end to end on eTour —
-> parse → index → retrieve → evaluate → justify — offline, in ~1.2s. It also
+> parse → index → retrieve → evaluate → justify — offline, in ~1.7s. It also
 > runs live inside an editor via MCP, at 0.25ms per query. All numbers below are
 > measured, reproducible from committed scripts, and include the negative results.
 
@@ -97,7 +97,7 @@ mkdir -p data && cp -r ../finegrained-traceability/datasets/etour data/
 ### Running
 
 ```bash
-python -m scripts.run_demo        # the demo -- offline, ~1.2s
+python -m scripts.run_demo        # the demo -- offline, ~1.7s
 python -m scripts.run_ablation    # full evaluation, writes results/
 python -m scripts.bench_latency   # interactive-latency benchmark
 pytest                            # tests -- offline, no model, ~1.3s
@@ -155,12 +155,17 @@ answers *"is it deployable?"* — measured on eTour:
 
 | | Cost | Budget |
 |---|---|---|
-| Cold start (once, at server boot) | ~3.5 s (92% model loading) | — |
+| Cold start (once, at server boot) | ~3–6 s, almost all model loading¹ | — |
 | Requirement → ranked methods | **0.25 ms** | 100 ms |
 | Method → ranked requirements | **0.02 ms** | 100 ms |
 | Orphan scan, whole corpus | **0.34 ms** | 100 ms |
 | New free-text query (embed + search) | **6.2 ms** | 100 ms |
 | Re-index one edited file | **46 ms** | 100 ms |
+
+¹ Dominated by loading the model off disk, so it swings with the OS page cache —
+observed 3.3 s warm to 21.8 s fully cold. It is paid once, behind the editor's
+own startup, which is exactly why the server is long-lived rather than
+shelled out to per query.
 
 100 ms is the threshold below which a response is perceived as instantaneous.
 Every interactive path is inside it; boot is not and needn't be, since it is paid

@@ -17,7 +17,12 @@ import argparse
 from pathlib import Path
 
 from src.eval.ablation import run_ablation
+from src.index.embedder import pin_offline_if_cached
 from src.pipeline import DEFAULT_DATA_DIR, load_corpus
+
+# Reported numbers must not depend on network reachability -- see
+# embedder.pin_offline_if_cached.
+pin_offline_if_cached()
 
 DEFAULT_RESULTS_DIR = Path("results")
 

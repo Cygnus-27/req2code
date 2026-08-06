@@ -25,7 +25,13 @@ import argparse
 import time
 from pathlib import Path
 
+from src.index.embedder import pin_offline_if_cached
 from src.pipeline import DEFAULT_DATA_DIR, load_corpus
+
+# Make the offline guarantee unconditional rather than incidental. Called at
+# import, before sentence-transformers loads, so a warm model never revalidates
+# over the network. See embedder.pin_offline_if_cached.
+pin_offline_if_cached()
 
 #: Requirement featured in the demo. UC20 ("InsertBanner") is chosen because its
 #: top-ranked node is a genuine gold link with substantial Javadoc, and because a
