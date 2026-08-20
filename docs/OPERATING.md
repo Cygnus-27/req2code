@@ -8,8 +8,9 @@ For someone opening this repo with no prior context. Read once, ~10 minutes.
 
 Software projects lose track of which code implements which requirement. This
 tool recovers that mapping automatically. You give it (a) requirement documents
-in English and (b) a Java codebase; it tells you, for each requirement, which
-**methods** most likely implement it — ranked, with line numbers.
+in English and (b) a codebase — Java, C#, Python, C, C++, Go or Rust; it tells
+you, for each requirement, which **methods** most likely implement it — ranked,
+with line numbers.
 
 It does this by *meaning*, not keyword matching. A requirement saying *"notify
 the user"* matches a method called `sendAlert()` even though they share no words.
@@ -59,7 +60,7 @@ The accuracy work happens in **how we prepare the text**, not in the model.
 > from the python.org interpreter explicitly:
 
 ```bash
-cd C:\Users\athar\Desktop\req2codeProj\req2code
+cd <wherever you cloned this>
 "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" -m venv .venv
 .venv\Scripts\activate
 python --version                        # MUST say 3.13.x -- stop if it doesn't
@@ -69,6 +70,18 @@ python -m pip install -r requirements.txt
 If `python --version` reports 3.12 (the Store Python), the venv is wrong. Delete
 it (`rmdir /s /q .venv`, after closing any editor that has it open — see §11) and
 recreate with the full path above.
+
+> **If the venv already exists but its Python has moved or been removed** — you
+> renamed your Windows user, moved the folder, or reinstalled Python — you do
+> *not* need to reinstall the packages. A venv records an absolute path to its
+> base interpreter in `.venv/pyvenv.cfg`, and only that pointer is broken:
+>
+> ```bash
+> "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" -m venv --upgrade .venv
+> ```
+>
+> This rewrites `pyvenv.cfg` and the launchers in place and keeps
+> `site-packages` — seconds, instead of re-downloading torch.
 
 Then fetch the dataset (not in the repo — see the README for why):
 
@@ -143,10 +156,16 @@ any number can be traced back to the exact run that produced it.
 |---|---|---|---|
 | B0 | TF-IDF, whole files (*the standard baseline*) | 0.233 | 0.398 |
 | B1 | TF-IDF, methods | 0.263 | 0.409 |
-| E0 | Embeddings, whole files | 0.366 | 0.516 |
-| **E1** | **Embeddings, methods — our method** | **0.409** | 0.556 |
-| E2 | E1 + requirement rewriting | 0.406 | **0.600** |
-| E3 | E2 + word-overlap boost | 0.405 | 0.598 |
+| E0 | Embeddings, whole files | 0.358 | 0.514 |
+| **E1** | **Embeddings, methods — our method** | **0.398** | 0.547 |
+| E2 | E1 + requirement rewriting | 0.397 | **0.588** |
+| E3 | E2 + word-overlap boost | 0.397 | 0.581 |
+
+> **These are lower than the numbers first published** (E1 was 0.409). A defect
+> in `node_doc.py` was injecting word fragments into every node document and
+> inflating MAP by 0.011. It is fixed; the README's *"These numbers are lower
+> than the ones we first published"* section has the full account. If you are
+> holding a printout that says 0.409, it came from `docs/results/2026-07-30/`.
 
 **MAP** (Mean Average Precision) rewards putting correct answers near the top of
 the list — 0 is worst, 1 is perfect. **R@10** is what fraction of correct answers
@@ -156,11 +175,11 @@ Read the table as an argument, not a leaderboard. Each row changes exactly one
 thing from a row above, so any gain can be attributed to a specific cause:
 
 - B0 → B1 (+0.030): smaller chunks help a little
-- B0 → E0 (+0.133): understanding meaning helps a lot
-- B0 → **E1 (+0.176)**: both together — *more than the sum*, so they reinforce
+- B0 → E0 (+0.125): understanding meaning helps a lot
+- B0 → **E1 (+0.165)**: both together — *more than the sum*, so they reinforce
   each other
 
-E2 and E3 slightly reduce MAP while improving recall and precision respectively.
+E2 and E3 sit within 0.001 MAP of E1 while E2 improves recall.
 Reported as measured, not filtered to the flattering subset.
 
 ---
@@ -171,9 +190,9 @@ All of it lives in text preparation and scoring. Ranked by likely payoff:
 
 | # | Change | File | Why it might help |
 |---|---|---|---|
-| 1 | Weight the method **name** more (repeat it 2–3× in the document) | `src/index/node_doc.py` → `build_node_document` | The name is the most concentrated signal; right now it competes with 100+ body words |
+| 1 | ~~Weight the method **name** more (repeat it 2–3×)~~ **Tried; it is worse.** | `src/index/node_doc.py` → `build_node_document` | Measured: name ×2 gives E1 MAP 0.387, ×3 gives 0.384, against 0.398 unweighted. Do not spend time here — the idea is refuted, which is itself a reportable negative result |
 | 2 | Raise/lower `MAX_BODY_WORDS` (currently 160) | `src/index/node_doc.py` | Less body = less noise but less context. Try 80 and 240 |
-| 3 | Expand `JAVA_STOPWORDS` with eTour-specific noise (`bean`, `db`, `manager`) | `src/index/node_doc.py` | These appear almost everywhere, so they add nothing but dilute vectors |
+| 3 | Expand the stopword sets with eTour-specific noise (`bean`, `db`, `manager`) | `src/parse/languages.py` → `JAVA_KEYWORDS` / `COMMON_STOPWORDS` | These appear almost everywhere, so they add nothing but dilute vectors. Stopwords moved here when the parser went multi-language — they are per-language now |
 | 4 | Try `β = 0.15` and `β = 0.5` for the word-overlap term | `src/eval/ablation.py` → `E3` config | Currently 0.3. **Try at most two values** — heavy tuning reads as overfitting |
 | 5 | Swap in a code-aware embedding model | `src/index/embedder.py` → `MODEL_NAME` | e.g. `microsoft/codebert-base`. A legitimate extra ablation row |
 | 6 | Keep `@param` text in Javadoc instead of dropping it | `src/index/node_doc.py` → `clean_doc_comment` | Parameter descriptions carry domain words; currently discarded |
@@ -233,6 +252,7 @@ Then: `pytest -q ; ruff check .` and commit.
 | **Baseline** | The standard existing method (TF-IDF) our approach must beat |
 | **Orphan** | A method no requirement appears to ask for |
 | **Corpus** | The whole dataset: 58 requirements + 116 Java files |
+| **LanguageSpec** | Per-language parsing rules (`src/parse/languages.py`) — node types, doc placement, name resolution |
 
 ---
 
@@ -243,8 +263,9 @@ Then: `pytest -q ; ruff check .` and commit.
   qualitatively in the demo.
 - **The orphan threshold is uncalibrated.** 0.30 flags 31% of methods — too many.
   The demo prints the full distribution so a reader can pick their own cutoff.
-- **One dataset, one language.** English requirements, Java code, 58 requirements.
-  Nothing here is shown to generalise yet.
+- **Seven languages parsed, one evaluated.** Java, C#, Python, C, C++, Go and
+  Rust all parse; every accuracy number is Java, because eTour is the only
+  corpus with an answer key.
 - **UC37 has no gold links.** eTour ships 58 use cases but only 57 are graded.
 - **Justifications aren't evaluated.** They're generated and cached; scoring them
   against human reasoning is future work.

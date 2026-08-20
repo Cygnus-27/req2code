@@ -246,3 +246,7 @@ models/
 # src/justify/cache/  IS committed. The LLM justifications must ship with the
 # repo so the demo runs with the network off and so results are reproducible by
 # someone without an API key. It is an input, not an output.
+
+# Claude Code local machine settings (permissions allowlist). Personal to one
+# machine -- the shared config, if we ever want one, is .claude/settings.json.
+.claude/settings.local.json

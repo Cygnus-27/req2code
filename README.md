@@ -8,8 +8,11 @@ tracing to individual methods rather than whole files.
 
 > **Status: working prototype.** The full pipeline runs end to end on eTour —
 > parse → index → retrieve → evaluate → justify — offline, in ~1.7s. It also
-> runs live inside an editor via MCP, at 0.25ms per query. All numbers below are
-> measured, reproducible from committed scripts, and include the negative results.
+> runs live inside an editor via MCP, at 0.25ms per query. The parser covers
+> seven languages; accuracy is measured on Java, the only corpus with an answer
+> key. All numbers below are measured, reproducible from committed scripts, and
+> include the negative results — including a defect we found in our own pipeline
+> that made an earlier published figure too high.
 
 ---
 
@@ -117,28 +120,67 @@ is attributable to a specific cause rather than to "the system".
 |-----|----------------|-------------|----------|-----|-----|------|
 | B0 | TF-IDF | file | classic baseline | 0.233 | 0.263 | 0.398 |
 | B1 | TF-IDF | AST node | does node granularity alone help? | 0.263 | 0.298 | 0.409 |
-| E0 | embeddings | file | does semantics alone help? | 0.366 | 0.393 | 0.516 |
-| E1 | embeddings | AST node | **our core method** | **0.409** | 0.407 | 0.556 |
-| E2 | E1 + query expansion | AST node | does requirement rewriting help? | 0.406 | 0.418 | **0.600** |
-| E3 | E2 + identifier overlap | AST node | does lexical signal add on top? | 0.405 | **0.432** | 0.598 |
+| E0 | embeddings | file | does semantics alone help? | 0.358 | 0.393 | 0.514 |
+| E1 | embeddings | AST node | **our core method** | **0.398** | 0.421 | 0.547 |
+| E2 | E1 + query expansion | AST node | does requirement rewriting help? | 0.397 | 0.411 | **0.588** |
+| E3 | E2 + identifier overlap | AST node | does lexical signal add on top? | 0.397 | 0.411 | 0.581 |
 
-**B0 → E1 is +0.176 MAP, a 76% relative improvement.** B1 and E0 are what make
+**B0 → E1 is +0.165 MAP, a 71% relative improvement.** B1 and E0 are what make
 that defensible: they separately rule out "the gain is just smaller chunks" and
 "the gain is just embeddings".
 
 The decomposition is the interesting part — granularity alone (B0→B1) is
-**+0.030**, semantics alone (B0→E0) is **+0.133**, both together (B0→E1) is
-**+0.176**. But 0.030 + 0.133 = 0.163, so the two effects are **more than
+**+0.030**, semantics alone (B0→E0) is **+0.125**, both together (B0→E1) is
+**+0.165**. But 0.030 + 0.125 = 0.155, so the two effects are **more than
 additive**: finer granularity gives the embedding model a cleaner unit to match
 against, making the techniques complementary rather than redundant.
 
-**E2 and E3 are honest negatives on the headline metric.** Both lose ~0.004 MAP
-against E1 while winning elsewhere — E2 the best recall (R@10 0.600), E3 the best
-precision (P@5 0.432). Query expansion and lexical overlap help find and rank
-links, but neither improves the ranked-order quality MAP measures. Reported as
-measured, not filtered to the flattering subset. (Note E2's "query expansion" is
-a mechanical stripper for use-case boilerplate identical across all 58
-requirements, not LLM rewriting — see `retrieve/query_expansion.py`.)
+**E2 and E3 are honest negatives on the headline metric.** Both sit within
+0.001 MAP of E1 while winning elsewhere — E2 the best recall (R@10 0.588).
+Query expansion and lexical overlap help find links, but neither improves the
+ranked-order quality MAP measures. Reported as measured, not filtered to the
+flattering subset. (Note E2's "query expansion" is a mechanical stripper for
+use-case boilerplate identical across all 58 requirements, not LLM rewriting —
+see `retrieve/query_expansion.py`.)
+
+### These numbers are lower than the ones we first published
+
+An earlier revision of this table reported E1 MAP **0.409**. That figure was
+inflated by a defect in `index/node_doc.py`, found while generalising the parser
+to seven languages, and it is corrected here.
+
+The document builder mined body identifiers from `node.text[len(node.signature):]`,
+assuming the raw source begins with the signature. It does not: `signature` is
+*reconstructed* by the parser (`int getX()`) while `text` is raw source
+(`public int getX()`), so the lengths never correspond. On eTour the slice
+landed mid-word in **1210 of 1210 nodes**, discarding real body content and
+injecting 185 distinct word fragments into the corpus — `ourist` (from
+*Tourist*) 64 times, `erence` 28, `ritage` 20.
+
+Removing the fragments *lowers* MAP by 0.011, which is above the ~0.005 noise
+floor on this corpus. That is a genuinely uncomfortable result and it is
+reported rather than buried:
+
+| Body extraction | E1 MAP | E1 P@5 | E1 R@10 |
+|---|---|---|---|
+| positional slice (defective, previously published) | 0.409 | 0.407 | 0.556 |
+| **exclude signature words (correct, current)** | **0.398** | **0.421** | 0.547 |
+| true body after the opening brace | 0.395 | 0.418 | 0.551 |
+
+Note precision moves the other way: P@5 *improves* to 0.421. The fragments were
+helping rank-order and hurting top-5 precision.
+
+**Why corrupted text helped is unresolved.** The obvious explanation — that
+fragments act as accidental repetition of domain-salient words, MiniLM's
+subword tokeniser mapping `ourist` near `tourist` — predicts that repeating the
+method name deliberately should recover the loss. Measured, it does not: name
+×2 gives 0.387 and ×3 gives 0.384, both *worse*. So the mechanism is something
+else, and characterising it is open work rather than a settled story.
+
+The headline claim is unaffected in kind: B0 → E1 remains a large, decomposed
+improvement over the classic baseline. The previous snapshot is preserved at
+`docs/results/2026-07-30/` as the provenance for anything already quoted from
+it.
 
 ### Fair-comparison note
 
@@ -211,8 +253,12 @@ one that names them.
   Node-level output is reported qualitatively, in the demo. This is a limitation
   of the evaluation, not the method — and the absence of node-level gold data is
   precisely why finer-grained traceability is under-studied.
-- **One dataset, one language.** English requirements, Java code. iTrust is
-  planned as a second dataset; nothing here is yet shown to generalise.
+- **Seven languages parsed, one evaluated.** The parser handles Java, C#,
+  Python, C, C++, Go and Rust (see `parse/languages.py`), but every accuracy
+  number on this page is measured on Java alone, because eTour is the only
+  corpus with an answer key. Retrieval demonstrably *runs* on the other six;
+  it is not yet shown to be equally *accurate* on them. A second labelled
+  corpus is what would close that gap.
 - **Small corpus.** ~58 requirements, ~116 artifacts, ~308 links. Enough to
   compare configurations, too small for claims about industrial codebases.
 - **The orphan threshold is uncalibrated.** The 0.30 default flags 311 of 995
@@ -258,7 +304,7 @@ See [NOTICE](NOTICE) for the full attribution statement.
 src/
   contracts.py   ← frozen data contracts; everything depends on these
   ingest/        requirements loader, repo walker
-  parse/         tree-sitter → CodeNode
+  parse/         languages.py (per-language specs) + parser.py (one walk, 7 langs)
   index/         node-document builder, per-node embedding cache, vector store
   retrieve/      req→code, code→req, orphans, hybrid scorer, query expansion
   justify/       LLM prompt + committed cache/
@@ -270,6 +316,9 @@ tests/
 ```
 
 `src/contracts.py` defines `Requirement`, `CodeNode`, and the results CSV schema.
+`src/parse/languages.py` is the second frozen interface, added when the parser
+went multi-language: it is what the walker and the indexer agree on, so a new
+language is a spec rather than a code change.
 These are frozen by agreement between both authors: freezing the interface is
 what lets the two halves of the project be built in parallel without blocking on
 each other. It is also why the retrieval engine and the presentation layer were

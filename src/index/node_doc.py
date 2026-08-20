@@ -104,14 +104,23 @@ def clean_doc_comment(raw: str) -> str:
     return " ".join(lines)
 
 
-def _identifier_words(source: str, limit: int | None = None) -> list[str]:
+def _identifier_words(
+    source: str, limit: int | None = None, exclude: set[str] | None = None
+) -> list[str]:
     """Extract and split every identifier-like token from a blob of source.
 
     Order is preserved and duplicates are dropped: repetition inside a body is
     usually a loop variable, not emphasis, so counting it would skew the vector
     toward whatever the method iterates over.
+
+    Args:
+        source: Raw source text to mine.
+        limit: Stop after this many words.
+        exclude: Words already emitted by an earlier part of the document, so
+            they are not repeated. This is how the body is prevented from
+            re-stating the signature -- see `build_node_document`.
     """
-    seen: set[str] = set()
+    seen: set[str] = set(exclude) if exclude else set()
     words: list[str] = []
     for token in re.findall(r"[A-Za-z_$][A-Za-z0-9_$]*", source):
         for word in split_identifier(token):
@@ -165,11 +174,26 @@ def build_node_document(
             parts.extend(w for w in split_identifier(cleaned) if len(w) > 1)
 
     # 4. Signature: parameter names carry real domain vocabulary.
-    parts.extend(_identifier_words(node.signature))
+    signature_words = _identifier_words(node.signature)
+    parts.extend(signature_words)
 
-    # 5. Body identifiers, capped.
-    body = node.text[len(node.signature) :] if node.signature else node.text
-    parts.extend(_identifier_words(body, limit=MAX_BODY_WORDS))
+    # 5. Body identifiers, capped, excluding anything the signature already said.
+    #
+    # NOTE: this used to slice the body positionally --
+    #     body = node.text[len(node.signature):]
+    # -- on the assumption that `node.text` starts with `node.signature`. It
+    # never does. `signature` is *reconstructed* by the parser ("int getX()"),
+    # while `text` is the raw source ("public int getX()"), so the lengths do
+    # not correspond and the slice cut the body at an arbitrary offset. Measured
+    # on eTour it mis-sliced 1210 of 1210 nodes, discarding real body content and
+    # injecting 185 distinct word fragments into the corpus -- "ourist" (from
+    # Tourist) 64 times, "erence" 28, "ritage" 20.
+    #
+    # Excluding by word is what the positional slice was trying to approximate,
+    # and unlike the slice it is correct by construction.
+    parts.extend(
+        _identifier_words(node.text, limit=MAX_BODY_WORDS, exclude=set(signature_words))
+    )
 
     return " ".join(parts)
 
