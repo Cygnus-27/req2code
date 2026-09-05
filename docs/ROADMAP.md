@@ -102,9 +102,9 @@ Nothing in either track can start until these are frozen, exactly as
 
 | # | Item | Why joint |
 |---|---|---|
-| 0.1 | `LanguageSpec` contract | Track A produces it, Track B's baselines consume nodes from it |
-| 0.2 | Session-requirement-log format | Track A writes it, Track B evaluates against it |
-| 0.3 | Extend `contracts.py` with a `language` field on `CodeNode` | Frozen contract — needs both signatures |
+| 0.1 | `LanguageSpec` contract | **Done.** `src/parse/languages.py` |
+| 0.2 | Session-requirement-log format | **Done, needs Atharv's signature.** `src/ingest/requirement_store.py`; shape in `docs/notes/A6-A8-workspace-mode.md`. Track A writes it, Track B evaluates against it |
+| 0.3 | Extend `contracts.py` with a `language` field on `CodeNode` | **Rejected.** Language is derivable from the suffix via `spec_for_path`, so it does not earn a place in a frozen contract. Reasoning in `languages.py` |
 
 ### Track A — Reach
 
@@ -115,11 +115,12 @@ Nothing in either track can start until these are frozen, exactly as
 | A3 | C# support | Structurally closest to Java; `///` XML doc comments |
 | A4 | C and C++ support | Free functions, namespaces, header/impl split |
 | A5 | Go and Rust support | Clean grammars; `///` and `//` doc conventions |
-| A6 | Workspace mode | Arbitrary repo root, `.gitignore`-aware, skip `node_modules`/`.venv`/`vendor`, size caps, binary skip |
-| A7 | Live requirement flow | `state_requirement(text)` → ranked nodes; the primary product path |
-| A8 | Session requirement store | Gitignored JSONL; feeds orphans and reverse tracing on repos with no corpus |
-| A9 | Language-aware `node_doc` | Java keywords are not Python keywords; stopwords must come from the `LanguageSpec` |
-| A10 | Scale benchmark | Re-run `bench_latency` on a 10k+ node real repository. The "real time" claim is currently proven only at 1210 nodes |
+| A6 | Workspace mode | **Done.** Arbitrary repo root via `ingest/workspace.py`; `.gitignore`-awareness comes from `git ls-files` rather than a hand-written ignore parser. `SKIP_DIRS`, size caps and suffix filters still apply on top |
+| A7 | Live requirement flow | **Done.** `state_requirement(text)` over MCP, `req2code state` on the CLI |
+| A8 | Session requirement store | **Done.** Append-only JSONL at `.req2code/requirements.jsonl`; deletion is a tombstone, not a rewrite. Format frozen — see 0.2 |
+| A9 | Language-aware `node_doc` | **Still open.** `node_doc.py` hard-codes `JAVA_STOPWORDS` while `languages.py` already exposes `stopwords_for_path`. Silently degrades the six non-Java languages |
+| A10 | Scale benchmark | Re-run `bench_latency` on a 10k+ node real repository. The "real time" claim is currently proven only at 1210 nodes. Attack the ~34 ms idle refresh first: it is three git subprocesses, and the HEAD check can become a stat of `.git/HEAD` |
+| A11 | Git-driven change detection | **Done, unplanned.** `ingest/vcs.py`. Fell out of A6: the mtime walk is O(files) per query and does not survive a real checkout. Git supplies candidates; mtime still decides |
 
 ### Track B — Rigour
 

@@ -220,26 +220,106 @@ per corpus.
 Protocol**, so one server reaches every MCP-speaking editor — Claude Code,
 Cursor, Zed, Windsurf, Claude Desktop — rather than needing a VSCode extension
 (which would miss Zed) plus a native Zed extension in Rust. Requires
-`pip install mcp`; nothing else in the project imports it. Tools exposed:
-`trace_requirement`, `search_code`, `whose_requirement`, `find_orphans`,
-`justify_link`. Every call first re-indexes any file whose mtime moved (~9 ms to
-check), so results never go stale — polling on the read path rather than a
+`pip install mcp` (2.x); nothing else in the project imports it. Tools exposed:
+`state_requirement`, `list_requirements`, `trace_requirement`, `search_code`,
+`whose_requirement`, `find_orphans`, `justify_link`. `state_requirement` is the
+primary path — the user describes behaviour, it is logged and traced in one call.
+
+Every call first refreshes the index, so results never go stale. Where the target
+is a git working tree that costs three read-only git commands whose price does
+not grow with the repository; otherwise it is an mtime scan of every source file
+(~9 ms on eTour). Either way it is polling on the read path rather than a
 filesystem watcher, which cannot miss an event.
 
 ### Running on your own repository
 
-Gold links are an **evaluation** input, not a retrieval one — nothing in
-`parse/`, `index/`, `retrieve/` or `justify/` reads them. Any directory with
-`req/*.txt` and `code/**.java` therefore works, with or without an answer key:
+Point it at any source tree. There is nothing to prepare — no requirement
+folder, no answer key, no config:
 
 ```bash
-REQ2CODE_DATA_DIR=/path/to/your/project python -m scripts.mcp_server
+python -m scripts.req2code --path /path/to/your/project index
 ```
 
-Without gold, tracing, orphan detection, and justification behave identically;
-you simply get no accuracy numbers, because there is nothing to score against.
-Strict validation of the documented eTour answer-key shape stays on for the
-bundled corpus, so the published figures keep their guard rails.
+**Requirements are stated, not read from a folder.** On a real project nobody
+has a directory of numbered use-case documents, so the requirement set is built
+by asking:
+
+```bash
+python -m scripts.req2code --path . state "the system shall notify the traveller about nearby attractions"
+```
+
+Each stated requirement is appended to `.req2code/requirements.jsonl` (gitignored,
+local, never leaves the machine), so the tool accretes its own requirement corpus
+as you use it. That is also what sharpens the orphan claim: an orphan stops
+meaning "unclaimed by the corpus we shipped" and starts meaning *code that
+nothing you have ever asked for touches*.
+
+| Command | |
+|---|---|
+| `index` | build the index, report what was found |
+| `state "<text>"` | state a requirement, log it, and trace it |
+| `search "<text>"` | one-off query; does **not** log |
+| `trace SR0001` | re-trace a stated requirement |
+| `whose <file> <line>` | what is the method under this cursor for? |
+| `orphans` | code no stated requirement claims |
+| `watch` | keep the index live while you work |
+
+Every query command takes `--json`, which is the shape the editor integration
+consumes.
+
+**The map follows the repository.** Where the target is a git working tree,
+change detection is driven by git rather than by scanning: an edit, a new file, a
+deletion, a commit, a branch switch and a revert all land in the index, each
+costing one re-parse and one embed of the file that actually changed. Measured on
+a scratch repo: 75 ms for an edit, 77 ms for a `git checkout` to a commit without
+the method, 34 ms for an idle check that finds nothing. Git is only used to
+decide *which files are worth looking at* — mtime still decides whether to
+reindex — so a target that is not under version control falls back to the
+filesystem walk and behaves exactly as before. Git is invoked through a
+read-only, remote-free allowlist (`ingest/vcs.py`); nothing here can reach a
+network.
+
+Gold links remain an **evaluation** input, never a retrieval one — nothing in
+`parse/`, `index/`, `retrieve/` or `justify/` reads them. A directory with
+`req/*.txt` beside `code/` is still detected as a research corpus and behaves as
+it always did, answer key or not; strict validation of the documented eTour shape
+stays on for the bundled corpus, so the published figures keep their guard rails.
+A research corpus is read-only — live requirements are refused there, so a
+published number can never depend on local state that is not in the repository.
+
+The same applies to the MCP server, which serves whatever `REQ2CODE_ROOT` points
+at:
+
+```bash
+REQ2CODE_ROOT=/path/to/your/project python -m scripts.mcp_server
+```
+
+The full path from a source file to a ranked mapping — every function and what
+it costs — is in **[docs/PIPELINE.md](docs/PIPELINE.md)**.
+
+### VS Code extension
+
+```bash
+python -m pip install mcp
+python editors/vscode/build_vsix.py
+code --install-extension editors/vscode/req2code-0.1.0.vsix
+```
+
+Zero npm dependencies and no build step — the extension is plain JavaScript, and
+`build_vsix.py` zips it into an installable package without `vsce`. Set
+`req2code.enginePath` to this checkout, open any repository, and the panel gives
+you:
+
+- **Trace** — state a requirement, get ranked methods, click to jump to the line
+- **Method** — follows the cursor: which requirements does *this* method serve?
+- **Orphans** — code nothing asks for, with the score distribution beside it
+- **Requirements** — the session log, retrace or forget
+- inline **CodeLens** labels naming the requirement above every method, and a
+  status bar showing engine state and index size as it updates live
+
+It is a client of the MCP server, not a second implementation — so the editor
+and any AI client always see the same answers. Setup, settings and
+troubleshooting: **[editors/vscode/req2code/README.md](editors/vscode/req2code/README.md)**.
 
 ## Limitations
 
@@ -261,8 +341,27 @@ one that names them.
   corpus is what would close that gap.
 - **Small corpus.** ~58 requirements, ~116 artifacts, ~308 links. Enough to
   compare configurations, too small for claims about industrial codebases.
-- **The orphan threshold is uncalibrated.** The 0.30 default flags 311 of 995
-  methods (31%) — far too many to review. The 5th percentile of the observed
+- **Workspace mode is demonstrated, not measured.** Running on an arbitrary
+  repository works and returns plausible answers — dogfooded on this project,
+  where *"detect which files changed since the last check, using version
+  control"* returns `diff_names()`, `Corpus._git_candidates()` and
+  `changed_since()` as its top three. But there is no answer key for an
+  arbitrary repository, so there is no MAP for it, and the failures are visible
+  too: a vaguely worded requirement (*"requirements must be saved locally so
+  they survive a restart"*) ranks `store_justification()` above
+  `append_requirement()`. Scores are honest about it — 0.52 for the good trace,
+  0.33 for the bad one — but "the score is low when it is wrong" is an
+  observation, not a calibration. Measuring this without labels is open work;
+  the promising direction is mining `(docstring, node)` pairs from the target
+  repository as free positives.
+- **Latency is measured at eTour's scale, not a real one.** The live-update
+  figures (75 ms per edit, 34 ms idle) come from a scratch repository. The idle
+  cost is dominated by Windows subprocess spawn — three `git` calls — and has
+  not been re-measured at 10k+ nodes. That is roadmap A10 and it is still open.
+- **The orphan threshold is uncalibrated**, and more so in workspace mode, where
+  the requirement set is whatever the user has stated so far — early on, almost
+  everything is legitimately unclaimed. The 0.30 default flags 311 of 995
+  methods (31%) on eTour — far too many to review. The 5th percentile of the observed
   distribution (0.17) flags 49 (5%), which is reviewable, but that is an
   observation rather than a principled cutoff. The demo prints the full
   distribution so a reader can pick their own. Calibrating it is open work.
@@ -303,16 +402,23 @@ See [NOTICE](NOTICE) for the full attribution statement.
 ```
 src/
   contracts.py   ← frozen data contracts; everything depends on these
-  ingest/        requirements loader, repo walker
+  ingest/        workspace layout detection, session requirement log, git change
+                 oracle, requirements loader, repo walker
   parse/         languages.py (per-language specs) + parser.py (one walk, 7 langs)
   index/         node-document builder, per-node embedding cache, vector store
-  retrieve/      req→code, code→req, orphans, hybrid scorer, query expansion
+  retrieve/      req→code, code→req, orphans, cursor→node, scorer, query expansion
   justify/       LLM prompt + committed cache/
   eval/          gold loader, metrics, TF-IDF baseline, ablation runner
-  pipeline.py    corpus loading + incremental re-index
-scripts/         run_demo, run_ablation, bench_latency, mcp_server, snapshot_results
+  pipeline.py    corpus loading + incremental re-index + live requirements
+  api.py         the JSON shapes every front end speaks -- defined once
+  cli.py         the command line
+scripts/         req2code (CLI), run_demo, run_ablation, bench_latency,
+                 mcp_server, snapshot_results
+editors/vscode/  the VS Code extension (plain JS, no dependencies) + build_vsix
 spikes/          throwaway learning scripts (not imported by src/)
 tests/
+docs/            PIPELINE.md (how a mapping is made), OPERATING.md, ROADMAP.md,
+                 notes/ (one per roadmap item, written for the other author)
 ```
 
 `src/contracts.py` defines `Requirement`, `CodeNode`, and the results CSV schema.

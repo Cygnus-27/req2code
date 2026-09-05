@@ -250,3 +250,19 @@ models/
 # Claude Code local machine settings (permissions allowlist). Personal to one
 # machine -- the shared config, if we ever want one, is .claude/settings.json.
 .claude/settings.local.json
+
+# Per-repository state this tool writes into whatever project it is pointed at:
+# the session requirement log. Ignored here so that dogfooding req2code on
+# req2code itself does not commit one author's stated requirements as if they
+# were project source. In someone else's repository the same rule applies, which
+# is why everything lives under one directory they can delete in one command.
+.req2code/
+
+# Built VS Code extension package. Reproducible from the committed source with
+# `python editors/vscode/build_vsix.py`, so committing it would just be a stale
+# binary someone eventually installs by accident.
+*.vsix
+
+# Generated panel preview (editors/vscode/preview_panel.py). Contains a snapshot
+# of whatever repository it was pointed at, so it is scratch, not source.
+editors/vscode/panel-preview.html

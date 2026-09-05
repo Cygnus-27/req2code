@@ -1,0 +1,393 @@
+/*
+  Everything is expressed in VS Code's own theme variables, so the panel is
+  correct in light, dark and high-contrast themes without three palettes. The
+  only place a literal colour appears is the score bar, which needs a hue that
+  reads as "strength" rather than as a UI affordance.
+*/
+
+:root {
+  --r2c-gap: 8px;
+  --r2c-radius: 4px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: transparent;
+}
+
+/* --- status ------------------------------------------------------------ */
+
+.status {
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.dot-stopped {
+  background: var(--vscode-descriptionForeground);
+}
+.dot-starting {
+  background: var(--vscode-charts-yellow, #d7ba7d);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+.dot-ready {
+  background: var(--vscode-charts-green, #89d185);
+}
+.dot-error {
+  background: var(--vscode-charts-red, #f14c4c);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+#statusText {
+  font-weight: 600;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-detail {
+  margin-top: 3px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  line-height: 1.45;
+  /* The status is written as three newline-separated lines -- counts, languages,
+     git. Without this they collapse into one run-on paragraph, because the text
+     is set with textContent (deliberately: it carries identifiers from the
+     user's source) and HTML folds newlines by default. */
+  white-space: pre-line;
+}
+
+.flash {
+  margin-top: 5px;
+  padding: 3px 6px;
+  border-radius: var(--r2c-radius);
+  background: var(--vscode-inputValidation-infoBackground, rgba(100, 148, 237, 0.15));
+  border: 1px solid var(--vscode-inputValidation-infoBorder, rgba(100, 148, 237, 0.4));
+  font-size: 0.9em;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.9em;
+  text-decoration: underline;
+}
+.link-btn:hover {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+/* --- tabs -------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.tab {
+  flex: 1 1 0;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 0.92em;
+}
+.tab:hover {
+  color: var(--vscode-foreground);
+}
+.tab-active {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--vscode-focusBorder);
+}
+
+/* --- panels ------------------------------------------------------------ */
+
+.panel {
+  padding: 10px;
+}
+
+textarea,
+input[type="text"] {
+  width: 100%;
+  padding: 6px;
+  border-radius: var(--r2c-radius);
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  font-family: inherit;
+  font-size: inherit;
+  resize: vertical;
+}
+textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--r2c-gap);
+  margin-top: var(--r2c-gap);
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 4px 10px;
+  border-radius: var(--r2c-radius);
+  border: 1px solid var(--vscode-button-border, transparent);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 0.92em;
+}
+button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+button.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.87em;
+  line-height: 1.5;
+}
+
+.result-head {
+  margin-top: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+
+.empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* --- hit list ---------------------------------------------------------- */
+
+.hits {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r2c-radius);
+  background: none;
+  cursor: pointer;
+}
+.hit:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.hit:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.hit-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.rank {
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  min-width: 1.6em;
+}
+
+.symbol {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.symbol .enclosing {
+  color: var(--vscode-descriptionForeground);
+}
+.symbol .name {
+  color: var(--vscode-symbolIcon-methodForeground, var(--vscode-foreground));
+  font-weight: 600;
+}
+
+.score {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.hit-loc {
+  margin-top: 1px;
+  padding-left: calc(1.6em + 6px);
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.84em;
+  font-family: var(--vscode-editor-font-family);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The score bar is the only visual encoding of magnitude. It sits under the
+   row rather than beside it so long symbol names never squeeze it away. */
+.bar {
+  margin: 4px 0 0 calc(1.6em + 6px);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vscode-charts-blue, #4fa6d9);
+  opacity: 0.75;
+  min-width: 1px;
+}
+
+.gold {
+  color: var(--vscode-charts-yellow, #d7ba7d);
+  font-size: 0.8em;
+}
+
+/* --- requirement rows -------------------------------------------------- */
+
+.req {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--r2c-radius);
+}
+.req:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.req-id {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.req-text {
+  flex: 1 1 auto;
+  line-height: 1.45;
+  font-size: 0.92em;
+}
+
+.req-del {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.req-del:hover {
+  color: var(--vscode-charts-red, #f14c4c);
+}
+
+/* --- method tab -------------------------------------------------------- */
+
+.method-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.method-loc {
+  margin-top: 2px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 0.82em;
+  background: var(--vscode-inputValidation-warningBackground, rgba(215, 186, 125, 0.18));
+  border: 1px solid var(--vscode-inputValidation-warningBorder, rgba(215, 186, 125, 0.5));
+}
+
+.req-hit {
+  padding: 5px 6px;
+  border-radius: var(--r2c-radius);
+  cursor: pointer;
+}
+.req-hit:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* --- distribution ------------------------------------------------------ */
+
+.dist {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.82em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.mono {
+  font-family: var(--vscode-editor-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- error ------------------------------------------------------------- */
+
+.error {
+  margin: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r2c-radius);
+  background: var(--vscode-inputValidation-errorBackground, rgba(241, 76, 76, 0.15));
+  border: 1px solid var(--vscode-inputValidation-errorBorder, rgba(241, 76, 76, 0.5));
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+
+[hidden] {
+  display: none !important;
+}

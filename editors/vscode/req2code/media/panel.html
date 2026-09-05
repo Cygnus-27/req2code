@@ -1,0 +1,93 @@
+<!--
+  The panel shell. Everything dynamic is drawn by panel.js.
+
+  The four tabs are the four questions the project claims to answer, in the
+  order a person asks them -- see the note at the top of extension.js.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="{{styleUri}}" />
+    <title>req2code</title>
+  </head>
+  <body>
+    <header id="status" class="status">
+      <div class="status-line">
+        <span id="dot" class="dot dot-stopped"></span>
+        <span id="statusText">starting…</span>
+        <button id="restart" class="link-btn" title="Restart the engine">restart</button>
+        <button id="log" class="link-btn" title="Show the engine log">log</button>
+      </div>
+      <div id="statusDetail" class="status-detail"></div>
+      <div id="flash" class="flash" hidden></div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab tab-active" data-tab="trace">Trace</button>
+      <button class="tab" data-tab="method">Method</button>
+      <button class="tab" data-tab="orphans">Orphans</button>
+      <button class="tab" data-tab="reqs">Requirements</button>
+    </nav>
+
+    <main>
+      <!-- 1. Requirement -> code -->
+      <section id="panel-trace" class="panel">
+        <textarea
+          id="query"
+          rows="3"
+          placeholder="Describe what the system should do — e.g. the system shall notify the traveller about nearby attractions"
+        ></textarea>
+        <div class="row">
+          <button id="stateBtn" class="primary" title="Record this requirement and trace it">
+            Trace &amp; record
+          </button>
+          <button id="searchBtn" title="Query without adding it to the requirement set">
+            Search only
+          </button>
+        </div>
+        <p class="hint">
+          <strong>Trace &amp; record</strong> adds the requirement to this project's set, so it
+          counts for orphan detection and reverse tracing. <strong>Search only</strong> is a
+          throwaway query.
+        </p>
+        <div id="traceHead" class="result-head"></div>
+        <ol id="traceList" class="hits"></ol>
+      </section>
+
+      <!-- 2. Code -> requirement, following the cursor -->
+      <section id="panel-method" class="panel" hidden>
+        <div id="methodBody">
+          <p class="empty">Put the cursor inside a method to see what it implements.</p>
+        </div>
+      </section>
+
+      <!-- 3. Unclaimed code -->
+      <section id="panel-orphans" class="panel" hidden>
+        <div class="row">
+          <label for="threshold">threshold</label>
+          <input id="threshold" type="range" min="0" max="0.8" step="0.01" value="0.30" />
+          <span id="thresholdValue" class="mono">0.30</span>
+          <button id="orphansBtn">Scan</button>
+        </div>
+        <div id="orphansHead" class="result-head"></div>
+        <ol id="orphansList" class="hits"></ol>
+      </section>
+
+      <!-- 4. The session requirement log -->
+      <section id="panel-reqs" class="panel" hidden>
+        <div id="reqsBody">
+          <p class="empty">No requirements stated yet.</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="error" class="error" hidden></div>
+    <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+  </body>
+</html>

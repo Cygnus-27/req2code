@@ -1,0 +1,96 @@
+{
+  "name": "req2code",
+  "displayName": "req2code — requirement traceability",
+  "description": "Map plain-English requirements to the methods that implement them, live, offline, in any repository.",
+  "version": "0.1.0",
+  "publisher": "req2code",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "req2code",
+          "title": "req2code",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "req2code": [
+        {
+          "id": "req2code.panel",
+          "name": "Traceability",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "req2code.focus",
+        "title": "req2code: Open panel"
+      },
+      {
+        "command": "req2code.trace",
+        "title": "req2code: Trace a requirement"
+      },
+      {
+        "command": "req2code.restart",
+        "title": "req2code: Restart engine"
+      },
+      {
+        "command": "req2code.toggleCodeLens",
+        "title": "req2code: Toggle inline requirement labels"
+      },
+      {
+        "command": "req2code.showOutput",
+        "title": "req2code: Show engine log"
+      }
+    ],
+    "configuration": {
+      "title": "req2code",
+      "properties": {
+        "req2code.enginePath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to your **req2code checkout** (the folder containing `scripts/mcp_server.py`). Leave blank to auto-detect when the open workspace *is* that checkout."
+        },
+        "req2code.pythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Python interpreter to run the engine with. Leave blank to use `.venv` inside the engine path, falling back to `python`."
+        },
+        "req2code.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the engine when a workspace opens."
+        },
+        "req2code.orphanThreshold": {
+          "type": "number",
+          "default": 0.3,
+          "description": "Score below which a method is treated as unclaimed. Uncalibrated — read it against the distribution shown in the Orphans tab."
+        },
+        "req2code.topK": {
+          "type": "number",
+          "default": 20,
+          "description": "How many methods a trace returns."
+        },
+        "req2code.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the best-matching requirement above each method."
+        },
+        "req2code.statusPollSeconds": {
+          "type": "number",
+          "default": 4,
+          "description": "How often the panel refreshes index status. Each poll also re-syncs the index with the repository."
+        }
+      }
+    }
+  }
+}
