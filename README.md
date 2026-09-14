@@ -299,6 +299,15 @@ it costs — is in **[docs/PIPELINE.md](docs/PIPELINE.md)**.
 
 ### VS Code extension
 
+Download the `.vsix` from [Releases](https://github.com/Cygnus-27/req2code/releases)
+and install it:
+
+```bash
+code --install-extension req2code-0.1.0.vsix
+```
+
+Or build it yourself from source:
+
 ```bash
 python -m pip install mcp
 python editors/vscode/build_vsix.py
