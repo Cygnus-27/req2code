@@ -383,6 +383,14 @@ window.addEventListener("message", (event) => {
       return renderOrphans(message.result);
     case "flash":
       return flash(message.text);
+    case "orphansStale":
+      // The requirement set changed, so every orphan score is now wrong.
+      // Re-scan if the tab is open; otherwise clear it so the next visit
+      // re-fetches rather than showing figures from a previous requirement set.
+      $("orphansList").replaceChildren();
+      $("orphansHead").textContent = "";
+      if (!$("panel-orphans").hidden) requestOrphans();
+      return;
     case "busy":
       return;
     case "error": {

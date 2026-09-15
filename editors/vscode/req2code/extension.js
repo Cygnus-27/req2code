@@ -435,6 +435,7 @@ class PanelProvider {
           await engine.call("ui_forget", { req_id: msg.req_id });
           codeLensProvider.clear();
           codeLensProvider.refresh();
+          this.post({ type: "orphansStale" });
           return pollStatus();
         }
         case "orphans":
@@ -470,9 +471,13 @@ class PanelProvider {
       this.post({ type: "trace", result });
       if (log) {
         // A new requirement changes every method's best match, so every cached
-        // annotation is now wrong.
+        // annotation AND the whole orphan ranking are now wrong. Missing the
+        // orphan half is the bug that makes a live demo look broken: the
+        // requirement records, the score really moves, and the panel keeps
+        // showing the previous requirement set's figures.
         codeLensProvider.clear();
         codeLensProvider.refresh();
+        this.post({ type: "orphansStale" });
         pollStatus();
       }
     } catch (err) {
